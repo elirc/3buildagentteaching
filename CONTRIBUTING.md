@@ -187,11 +187,23 @@ file reads `${POSTGRES_PORT:-5432}` for exactly this reason.
 ### Verification
 
 ```bash
-npm run verify            # typecheck + lint + unit tests. Run this before every push.
+npm run verify            # typecheck + unit tests. Run this before every push.
+npm run verify:full       # adds lint. This is what CI runs.
 npm run test:integration  # services against a real Postgres (needs the test DB up)
 npm run test:e2e          # Playwright smoke over the seeded app
 npm run agents:eval       # golden-fixture regression check for the agents
 ```
+
+**Why `lint` is not in `verify`.** `eslint.config.mjs` extends
+`next/typescript`, which turns on type-aware rules. Those rules re-typecheck the
+whole project inside ESLint, and on a cold cache that measured **12m 45s** on the
+reference Windows machine — against roughly 65s for the unit tests. A gate that
+slow stops being run, and a gate nobody runs is worse than no gate.
+
+So the split is deliberate: `verify` is the fast loop you actually run before
+every push, and `verify:full` (with lint) runs in CI where a slow job costs
+nobody's attention. If you are touching JSX or hooks, run `npm run lint` yourself
+before pushing rather than waiting for CI to tell you.
 
 ---
 
