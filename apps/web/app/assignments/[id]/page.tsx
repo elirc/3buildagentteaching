@@ -6,6 +6,7 @@ import { AgentPanel } from "@/components/agent-panel";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, percent } from "@/lib/format";
 import { createSubmission, publishAssignment, runGradingConsistencyAgent, updateAssignment } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function AssignmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -39,7 +40,7 @@ export default async function AssignmentDetailPage({ params }: { params: Promise
 
       <div className="split" style={{ marginTop: "var(--space-4)" }}>
         <Card>
-          <CardHeader title="Submissions" actions={assignment.status === "Draft" ? <form action={publishAssignment}><input type="hidden" name="id" value={assignment.id} /><button className="ui-button ui-button--primary" type="submit">Publish</button></form> : null} />
+          <CardHeader title="Submissions" actions={assignment.status === "Draft" ? <ActionForm action={publishAssignment}><input type="hidden" name="id" value={assignment.id} /><SubmitButton variant="primary">Publish</SubmitButton></ActionForm> : null} />
           <DataTable>
             <thead><tr><th>Student</th><th>Status</th><th>Submitted</th><th>Score</th><th>Feedback</th></tr></thead>
             <tbody>
@@ -59,7 +60,7 @@ export default async function AssignmentDetailPage({ params }: { params: Promise
         <div className="stack">
           <Card>
             <CardHeader title="Edit Assignment" />
-            <form action={updateAssignment} className="stack">
+            <ActionForm action={updateAssignment} className="stack">
               <input type="hidden" name="id" value={assignment.id} />
               <input type="hidden" name="classSectionId" value={assignment.classSectionId} />
               <input type="hidden" name="gradingPeriodId" value={assignment.gradingPeriodId ?? ""} />
@@ -70,8 +71,8 @@ export default async function AssignmentDetailPage({ params }: { params: Promise
               <Field label="Due date"><input name="dueDate" type="date" defaultValue={assignment.dueDate.toISOString().slice(0, 10)} required /></Field>
               <Field label="Points possible"><input name="pointsPossible" type="number" min="1" step="0.5" defaultValue={assignment.pointsPossible} required /></Field>
               <Field label="Description"><textarea name="description" defaultValue={assignment.description} required /></Field>
-              <button className="ui-button ui-button--primary" type="submit">Save assignment</button>
-            </form>
+              <SubmitButton variant="primary">Save assignment</SubmitButton>
+            </ActionForm>
           </Card>
 
           <Card>
@@ -91,12 +92,12 @@ export default async function AssignmentDetailPage({ params }: { params: Promise
           <AgentPanel
             title="Grading Consistency Agent"
             run={gradingConsistencyRun}
-            action={<form action={runGradingConsistencyAgent}><input type="hidden" name="assignmentId" value={assignment.id} /><button className="ui-button ui-button--secondary" type="submit">Run grading check</button></form>}
+            action={<ActionForm action={runGradingConsistencyAgent}><input type="hidden" name="assignmentId" value={assignment.id} /><SubmitButton variant="secondary">Run grading check</SubmitButton></ActionForm>}
           />
 
           <Card>
             <CardHeader title="Student Submission Form" />
-            <form action={createSubmission} className="stack">
+            <ActionForm action={createSubmission} className="stack">
               <input type="hidden" name="assignmentId" value={assignment.id} />
               <Field label="Student">
                 <select name="studentId">
@@ -105,8 +106,8 @@ export default async function AssignmentDetailPage({ params }: { params: Promise
               </Field>
               <Field label="Content"><textarea name="contentText" required /></Field>
               <Field label="Attachment URL"><input name="attachmentUrl" placeholder="/fake/local/file.pdf" /></Field>
-              <button className="ui-button ui-button--primary" type="submit">Submit assignment</button>
-            </form>
+              <SubmitButton variant="primary">Submit assignment</SubmitButton>
+            </ActionForm>
           </Card>
         </div>
       </div>

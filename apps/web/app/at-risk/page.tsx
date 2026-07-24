@@ -3,6 +3,7 @@ import { getAtRiskStudentQueue } from "@agentic-edu/application";
 import { StatusBadge } from "@/components/status-badge";
 import { percent } from "@/lib/format";
 import { runAtRiskAgent } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function AtRiskPage() {
   const rows = await getAtRiskStudentQueue();
@@ -23,7 +24,7 @@ export default async function AtRiskPage() {
                 <td>{percent(gradeSummary.average)}</td>
                 <td>{attendanceSummary.absent}</td>
                 <td>{risk.evidence.slice(0, 2).join(" ")}</td>
-                <td><form action={runAtRiskAgent}><input type="hidden" name="studentId" value={student.id} /><button className="ui-button ui-button--secondary" type="submit">Run</button></form></td>
+                <td><ActionForm action={runAtRiskAgent}><input type="hidden" name="studentId" value={student.id} /><SubmitButton variant="secondary">Run</SubmitButton></ActionForm></td>
               </tr>
             ))}
           </tbody>

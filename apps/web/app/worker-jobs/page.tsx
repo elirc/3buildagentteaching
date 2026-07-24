@@ -3,6 +3,7 @@ import { getAgentOperationsOverview } from "@agentic-edu/application";
 import { runNextWorkerJob } from "@/lib/actions";
 import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function WorkerJobsPage() {
   const overview = await getAgentOperationsOverview();
@@ -13,9 +14,9 @@ export default async function WorkerJobsPage() {
         title="Worker Jobs"
         description="Deterministic local worker simulation with idempotency keys, retry scheduling, and lock visibility."
         actions={
-          <form action={runNextWorkerJob}>
-            <button className="ui-button ui-button--primary" type="submit">Run next job</button>
-          </form>
+          <ActionForm action={runNextWorkerJob}>
+            <SubmitButton variant="primary">Run next job</SubmitButton>
+          </ActionForm>
         }
       />
       <div className="ui-stat-grid">

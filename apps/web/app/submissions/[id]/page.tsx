@@ -6,6 +6,7 @@ import { AgentPanel } from "@/components/agent-panel";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime, percent } from "@/lib/format";
 import { gradeSubmission, runAssignmentFeedbackAgent } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function SubmissionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,7 +33,7 @@ export default async function SubmissionDetailPage({ params }: { params: Promise
             <p>{submission.contentText ?? "No content submitted."}</p>
             {submission.attachmentUrl ? <p><strong>Attachment:</strong> {submission.attachmentUrl}</p> : null}
           </Card>
-          <AgentPanel title="Assignment Feedback Agent Panel" run={latestRun} action={<form action={runAssignmentFeedbackAgent}><input type="hidden" name="submissionId" value={submission.id} /><button className="ui-button ui-button--primary" type="submit">Run feedback agent</button></form>} />
+          <AgentPanel title="Assignment Feedback Agent Panel" run={latestRun} action={<ActionForm action={runAssignmentFeedbackAgent}><input type="hidden" name="submissionId" value={submission.id} /><SubmitButton variant="primary">Run feedback agent</SubmitButton></ActionForm>} />
           <Card>
             <CardHeader title="Raw Submission Snapshot" />
             <JsonBlock value={submission} />
@@ -40,13 +41,13 @@ export default async function SubmissionDetailPage({ params }: { params: Promise
         </div>
         <Card>
           <CardHeader title="Grading View" />
-          <form action={gradeSubmission} className="stack">
+          <ActionForm action={gradeSubmission} className="stack">
             <input type="hidden" name="id" value={submission.id} />
             <input type="hidden" name="gradedByTeacherId" value={submission.assignment.classSection.teacherId} />
             <Field label="Score"><input name="score" type="number" step="0.5" min="0" max={submission.assignment.pointsPossible} defaultValue={submission.score ?? ""} required /></Field>
             <Field label="Feedback"><textarea name="feedback" defaultValue={submission.feedback ?? ""} /></Field>
-            <button className="ui-button ui-button--primary" type="submit">Save grade</button>
-          </form>
+            <SubmitButton variant="primary">Save grade</SubmitButton>
+          </ActionForm>
         </Card>
       </div>
     </>

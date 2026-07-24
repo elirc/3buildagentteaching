@@ -3,6 +3,7 @@ import { getAcademicOperationsOverview } from "@agentic-edu/application";
 import { markNotificationRead } from "@/lib/actions";
 import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function NotificationsPage() {
   const overview = await getAcademicOperationsOverview();
@@ -29,10 +30,10 @@ export default async function NotificationsPage() {
                 <td><StatusBadge value={notification.status} /></td>
                 <td>{formatDateTime(notification.createdAt)}</td>
                 <td>
-                  <form action={markNotificationRead}>
+                  <ActionForm action={markNotificationRead}>
                     <input type="hidden" name="id" value={notification.id} />
-                    <button className="ui-button ui-button--secondary" type="submit" disabled={notification.status === "Read"}>Mark read</button>
-                  </form>
+                    <SubmitButton variant="secondary" disabled={notification.status === "Read"}>Mark read</SubmitButton>
+                  </ActionForm>
                 </td>
               </tr>
             ))}

@@ -5,6 +5,7 @@ import { AgentPanel } from "@/components/agent-panel";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime } from "@/lib/format";
 import { deadLetterBackgroundJob, retryBackgroundJob, runFailedJobInvestigationAgent } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,12 +29,12 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           <Card>
             <CardHeader title="Job Controls" />
             <div className="ui-actions" style={{ justifyContent: "flex-start" }}>
-              <form action={retryBackgroundJob}><input type="hidden" name="id" value={job.id} /><button className="ui-button ui-button--primary" type="submit">Retry failed job</button></form>
-              <form action={deadLetterBackgroundJob}><input type="hidden" name="id" value={job.id} /><button className="ui-button ui-button--danger" type="submit">Mark dead-lettered</button></form>
+              <ActionForm action={retryBackgroundJob}><input type="hidden" name="id" value={job.id} /><SubmitButton variant="primary">Retry failed job</SubmitButton></ActionForm>
+              <ActionForm action={deadLetterBackgroundJob}><input type="hidden" name="id" value={job.id} /><SubmitButton variant="danger">Mark dead-lettered</SubmitButton></ActionForm>
             </div>
             {job.errorMessage ? <p><strong>Error:</strong> {job.errorMessage}</p> : null}
           </Card>
-          <AgentPanel title="Failed Job Investigation Panel" run={latestRun} action={<form action={runFailedJobInvestigationAgent}><input type="hidden" name="jobId" value={job.id} /><button className="ui-button ui-button--primary" type="submit">Run investigation</button></form>} />
+          <AgentPanel title="Failed Job Investigation Panel" run={latestRun} action={<ActionForm action={runFailedJobInvestigationAgent}><input type="hidden" name="jobId" value={job.id} /><SubmitButton variant="primary">Run investigation</SubmitButton></ActionForm>} />
           <Card><CardHeader title="Payload" /><JsonBlock value={job.payload} /></Card>
         </div>
         <div className="stack">

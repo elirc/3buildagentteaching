@@ -11,6 +11,7 @@ import {
   runStudentSuccessReviewAgent,
   updateStudent
 } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -132,7 +133,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         <div className="stack">
           <Card>
             <CardHeader title="Edit Student" />
-            <form action={updateStudent} className="stack">
+            <ActionForm action={updateStudent} className="stack">
               <input type="hidden" name="id" value={student.id} />
               <div className="form-grid">
                 <Field label="First name"><input name="firstName" defaultValue={student.firstName} required /></Field>
@@ -157,29 +158,29 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                   </select>
                 </Field>
               </div>
-              <button className="ui-button ui-button--primary" type="submit">Save student</button>
-            </form>
+              <SubmitButton variant="primary">Save student</SubmitButton>
+            </ActionForm>
           </Card>
 
           <AgentPanel
             title="Student Progress Agent Panel"
             run={progressRun}
-            action={<form action={runStudentProgressAgent}><input type="hidden" name="studentId" value={student.id} /><button className="ui-button ui-button--primary" type="submit">Run progress agent</button></form>}
+            action={<ActionForm action={runStudentProgressAgent}><input type="hidden" name="studentId" value={student.id} /><SubmitButton variant="primary">Run progress agent</SubmitButton></ActionForm>}
           />
           <AgentPanel
             title="At-Risk Detection Agent Panel"
             run={riskRun}
-            action={<form action={runAtRiskAgent}><input type="hidden" name="studentId" value={student.id} /><button className="ui-button ui-button--primary" type="submit">Run risk agent</button></form>}
+            action={<ActionForm action={runAtRiskAgent}><input type="hidden" name="studentId" value={student.id} /><SubmitButton variant="primary">Run risk agent</SubmitButton></ActionForm>}
           />
           <AgentPanel
             title="Guardian Communication Draft Agent"
             run={guardianDraftRun}
-            action={<form action={runGuardianCommunicationDraftAgent}><input type="hidden" name="studentId" value={student.id} /><button className="ui-button ui-button--secondary" type="submit">Draft guardian message</button></form>}
+            action={<ActionForm action={runGuardianCommunicationDraftAgent}><input type="hidden" name="studentId" value={student.id} /><SubmitButton variant="secondary">Draft guardian message</SubmitButton></ActionForm>}
           />
           <AgentPanel
             title="Student Success Review Agent"
             run={successReviewRun}
-            action={<form action={runStudentSuccessReviewAgent}><input type="hidden" name="studentId" value={student.id} /><button className="ui-button ui-button--secondary" type="submit">Run success review</button></form>}
+            action={<ActionForm action={runStudentSuccessReviewAgent}><input type="hidden" name="studentId" value={student.id} /><SubmitButton variant="secondary">Run success review</SubmitButton></ActionForm>}
           />
         </div>
       </div>

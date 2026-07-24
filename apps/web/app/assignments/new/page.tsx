@@ -1,6 +1,7 @@
 import { Card, CardHeader, Field, PageHeader } from "@agentic-edu/ui";
 import { prisma } from "@agentic-edu/db";
 import { createAssignment } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function NewAssignmentPage() {
   const [sections, teachers, gradingPeriods] = await Promise.all([
@@ -13,7 +14,7 @@ export default async function NewAssignmentPage() {
       <PageHeader title="New Assignment" description="Create and optionally publish an assignment for a class section." />
       <Card>
         <CardHeader title="Assignment details" />
-        <form action={createAssignment} className="stack">
+        <ActionForm action={createAssignment} className="stack">
           <div className="form-grid">
             <Field label="Section"><select name="classSectionId">{sections.map((section) => <option key={section.id} value={section.id}>{section.course.title} · {section.term}</option>)}</select></Field>
             <Field label="Grading period">
@@ -31,10 +32,10 @@ export default async function NewAssignmentPage() {
             <Field label="Description"><textarea name="description" required /></Field>
           </div>
           <div className="form-actions">
-            <button className="ui-button ui-button--primary" type="submit">Create assignment</button>
+            <SubmitButton variant="primary">Create assignment</SubmitButton>
             <a className="ui-button ui-button--secondary" href="/assignments">Cancel</a>
           </div>
-        </form>
+        </ActionForm>
       </Card>
     </>
   );

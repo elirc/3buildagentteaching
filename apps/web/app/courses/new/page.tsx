@@ -1,5 +1,6 @@
 import { Card, CardHeader, Field, PageHeader } from "@agentic-edu/ui";
 import { createCourse } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default function NewCoursePage() {
   return (
@@ -7,7 +8,7 @@ export default function NewCoursePage() {
       <PageHeader title="New Course" description="Create a reusable course catalog entry. Sections are scheduled separately." />
       <Card>
         <CardHeader title="Course details" />
-        <form action={createCourse} className="stack">
+        <ActionForm action={createCourse} className="stack">
           <div className="form-grid">
             <Field label="Code"><input name="code" required /></Field>
             <Field label="Title"><input name="title" required /></Field>
@@ -24,10 +25,10 @@ export default function NewCoursePage() {
             <Field label="Description"><textarea name="description" required /></Field>
           </div>
           <div className="form-actions">
-            <button className="ui-button ui-button--primary" type="submit">Create course</button>
+            <SubmitButton variant="primary">Create course</SubmitButton>
             <a className="ui-button ui-button--secondary" href="/courses">Cancel</a>
           </div>
-        </form>
+        </ActionForm>
       </Card>
     </>
   );

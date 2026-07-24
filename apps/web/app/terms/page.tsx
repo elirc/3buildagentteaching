@@ -3,6 +3,7 @@ import { getAcademicOperationsOverview } from "@agentic-edu/application";
 import { createAcademicTerm, createGradingPeriod } from "@/lib/actions";
 import { formatDate } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function TermsPage() {
   const overview = await getAcademicOperationsOverview();
@@ -18,7 +19,7 @@ export default async function TermsPage() {
 
       <Card>
         <CardHeader title="Create Term" />
-        <form action={createAcademicTerm} className="ui-form-grid">
+        <ActionForm action={createAcademicTerm} className="ui-form-grid">
           <Field label="Name"><input name="name" placeholder="Winter 2027" required /></Field>
           <Field label="Status">
             <select name="status" defaultValue="Planned">
@@ -30,13 +31,13 @@ export default async function TermsPage() {
           </Field>
           <Field label="Starts"><input name="startsAt" type="date" required /></Field>
           <Field label="Ends"><input name="endsAt" type="date" required /></Field>
-          <button className="ui-button ui-button--primary" type="submit">Create term</button>
-        </form>
+          <SubmitButton variant="primary">Create term</SubmitButton>
+        </ActionForm>
       </Card>
 
       <Card>
         <CardHeader title="Create Grading Period" />
-        <form action={createGradingPeriod} className="ui-form-grid">
+        <ActionForm action={createGradingPeriod} className="ui-form-grid">
           <Field label="Term">
             <select name="academicTermId">
               {overview.terms.map((term) => <option key={term.id} value={term.id}>{term.name}</option>)}
@@ -46,8 +47,8 @@ export default async function TermsPage() {
           <Field label="Starts"><input name="startsAt" type="date" required /></Field>
           <Field label="Ends"><input name="endsAt" type="date" required /></Field>
           <Field label="Weight"><input name="weight" type="number" step="0.1" defaultValue="1" required /></Field>
-          <button className="ui-button ui-button--secondary" type="submit">Add period</button>
-        </form>
+          <SubmitButton variant="secondary">Add period</SubmitButton>
+        </ActionForm>
       </Card>
 
       <Card>

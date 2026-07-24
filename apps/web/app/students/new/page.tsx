@@ -1,6 +1,7 @@
 import { Card, CardHeader, Field, PageHeader } from "@agentic-edu/ui";
 import { prisma } from "@agentic-edu/db";
 import { createStudent } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function NewStudentPage() {
   const advisors = await prisma.user.findMany({ where: { role: "Advisor" }, orderBy: { name: "asc" } });
@@ -9,7 +10,7 @@ export default async function NewStudentPage() {
       <PageHeader title="New Student" description="Create a student profile with guardian and advisor context." />
       <Card>
         <CardHeader title="Student details" />
-        <form action={createStudent} className="stack">
+        <ActionForm action={createStudent} className="stack">
           <div className="form-grid">
             <Field label="First name"><input name="firstName" required /></Field>
             <Field label="Last name"><input name="lastName" required /></Field>
@@ -34,10 +35,10 @@ export default async function NewStudentPage() {
             </Field>
           </div>
           <div className="form-actions">
-            <button className="ui-button ui-button--primary" type="submit">Create student</button>
+            <SubmitButton variant="primary">Create student</SubmitButton>
             <a className="ui-button ui-button--secondary" href="/students">Cancel</a>
           </div>
-        </form>
+        </ActionForm>
       </Card>
     </>
   );

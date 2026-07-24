@@ -5,6 +5,7 @@ import { AgentPanel } from "@/components/agent-panel";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime } from "@/lib/format";
 import { runTeacherWorkloadAgent, updateTeacher } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function TeacherDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -72,7 +73,7 @@ export default async function TeacherDetailPage({ params }: { params: Promise<{ 
         <div className="stack">
           <Card>
             <CardHeader title="Edit Teacher" />
-            <form action={updateTeacher} className="stack">
+            <ActionForm action={updateTeacher} className="stack">
               <input type="hidden" name="id" value={teacher.id} />
               <div className="form-grid">
                 <Field label="First name"><input name="firstName" defaultValue={teacher.firstName} required /></Field>
@@ -89,18 +90,18 @@ export default async function TeacherDetailPage({ params }: { params: Promise<{ 
                 <Field label="Subjects taught"><input name="subjectsTaught" defaultValue={teacher.subjectsTaught.join(", ")} /></Field>
                 <Field label="Office location"><input name="officeLocation" defaultValue={teacher.officeLocation ?? ""} /></Field>
               </div>
-              <button className="ui-button ui-button--primary" type="submit">Save teacher</button>
-            </form>
+              <SubmitButton variant="primary">Save teacher</SubmitButton>
+            </ActionForm>
           </Card>
 
           <AgentPanel
             title="Teacher Workload Agent Panel"
             run={latestRun}
             action={
-              <form action={runTeacherWorkloadAgent}>
+              <ActionForm action={runTeacherWorkloadAgent}>
                 <input type="hidden" name="teacherId" value={teacher.id} />
-                <button className="ui-button ui-button--primary" type="submit">Run agent</button>
-              </form>
+                <SubmitButton variant="primary">Run agent</SubmitButton>
+              </ActionForm>
             }
           >
             <div className="ui-actions" style={{ justifyContent: "flex-start", marginBottom: "var(--space-3)" }}>

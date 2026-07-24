@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  academicTermStatusSchema,
+  approvalDecisionSchema,
   calculateGradeSummary,
   calculateNextRetryAt,
   calculateRubricScore,
@@ -8,6 +10,9 @@ import {
   canTransitionApproval,
   decideEnrollment,
   determineSubmissionStatus,
+  guardianRelationshipSchema,
+  interventionStatusSchema,
+  recommendationDecisionSchema,
   nextNotificationStatusAfterRead,
   retryJob,
   rubricRequiresTeacherReview,
@@ -212,6 +217,27 @@ describe("validation", () => {
         guardianEmail: "guardian@example.com"
       })
     ).toThrow();
+  });
+
+  it("rejects enum values that used to reach Prisma through an `as never` cast", () => {
+    // Each of these strings is what a tampered <select> or a renamed enum value
+    // actually sends. Before these schemas existed the cast let them through and
+    // Prisma raised a driver error the user could do nothing with.
+    expect(() => interventionStatusSchema.parse("Archived")).toThrow();
+    expect(() => academicTermStatusSchema.parse("Draft")).toThrow();
+    expect(() => guardianRelationshipSchema.parse("Sibling")).toThrow();
+    expect(() => approvalDecisionSchema.parse("NotAStatus")).toThrow();
+  });
+
+  it("refuses to move a decision back to its pending state", () => {
+    // "Requested" and "Proposed" are starting states. A reviewer decides; they
+    // do not un-decide. Parsing is the cheapest place to enforce that, and the
+    // Exclude<> typing means a form offering the option would not compile.
+    expect(() => approvalDecisionSchema.parse("Requested")).toThrow();
+    expect(() => recommendationDecisionSchema.parse("Proposed")).toThrow();
+
+    expect(approvalDecisionSchema.parse("Approved")).toBe("Approved");
+    expect(recommendationDecisionSchema.parse("Completed")).toBe("Completed");
   });
 });
 

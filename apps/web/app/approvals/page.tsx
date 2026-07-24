@@ -4,6 +4,7 @@ import { getAcademicOperationsOverview } from "@agentic-edu/application";
 import { decideInterventionApproval, requestInterventionApproval } from "@/lib/actions";
 import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function ApprovalsPage() {
   const [overview, plans] = await Promise.all([
@@ -22,14 +23,14 @@ export default async function ApprovalsPage() {
 
       <Card>
         <CardHeader title="Request Approval" />
-        <form action={requestInterventionApproval} className="ui-form-grid">
+        <ActionForm action={requestInterventionApproval} className="ui-form-grid">
           <Field label="Intervention plan">
             <select name="interventionPlanId">
               {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.student.firstName} {plan.student.lastName}: {plan.summary}</option>)}
             </select>
           </Field>
-          <button className="ui-button ui-button--primary" type="submit">Request approval</button>
-        </form>
+          <SubmitButton variant="primary">Request approval</SubmitButton>
+        </ActionForm>
       </Card>
 
       <Card>
@@ -48,18 +49,18 @@ export default async function ApprovalsPage() {
                 <td>
                   {approval.status === "Requested" ? (
                     <div className="ui-actions">
-                      <form action={decideInterventionApproval}>
+                      <ActionForm action={decideInterventionApproval}>
                         <input type="hidden" name="id" value={approval.id} />
                         <input type="hidden" name="status" value="Approved" />
                         <input type="hidden" name="rationale" value="Reviewed from approvals page." />
-                        <button className="ui-button ui-button--secondary" type="submit">Approve</button>
-                      </form>
-                      <form action={decideInterventionApproval}>
+                        <SubmitButton variant="secondary">Approve</SubmitButton>
+                      </ActionForm>
+                      <ActionForm action={decideInterventionApproval}>
                         <input type="hidden" name="id" value={approval.id} />
                         <input type="hidden" name="status" value="Rejected" />
                         <input type="hidden" name="rationale" value="Rejected from approvals page." />
-                        <button className="ui-button ui-button--danger" type="submit">Reject</button>
-                      </form>
+                        <SubmitButton variant="danger">Reject</SubmitButton>
+                      </ActionForm>
                     </div>
                   ) : approval.rationale ?? "Decided"}
                 </td>
