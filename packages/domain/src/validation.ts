@@ -1,4 +1,13 @@
 import { z } from "zod";
+import type {
+  AcademicTermStatus,
+  AgentRecommendationStatus,
+  ApprovalStatus,
+  AttendanceStatus,
+  GuardianRelationship,
+  InterventionStatus,
+  SupportNoteVisibility
+} from "@agentic-edu/shared";
 
 export const teacherSchema = z.object({
   userId: z.string().optional().nullable(),
@@ -97,6 +106,60 @@ export const interventionPlanSchema = z.object({
   recommendedActions: z.array(z.string().min(1)).min(1),
   followUpDate: z.coerce.date()
 });
+
+/**
+ * Standalone enum schemas.
+ *
+ * The object schemas above cover the big create/update forms. These cover the
+ * small ones — the single-<select> actions like "approve this request" or
+ * "close this term" — which previously reached Prisma through an `as never`
+ * cast. `as never` silences the compiler without checking anything at runtime,
+ * so an unexpected string went straight to the database driver and surfaced as
+ * a Prisma error rather than a message anyone could act on.
+ *
+ * Each of these is the single source of truth for its enum at the action
+ * boundary. They intentionally restate the Prisma enums rather than importing
+ * them: `packages/domain` must not depend on generated Prisma types, or the
+ * pure layer stops being pure and every test above it needs a client.
+ *
+ * The `satisfies readonly X[]` clauses are what stop the restatement drifting.
+ * A typo like "Cancelledd", or a value deleted from the shared union, fails to
+ * compile here rather than at runtime in a form nobody tests.
+ */
+const interventionStatuses = ["Draft", "Active", "Completed", "Cancelled"] as const satisfies readonly InterventionStatus[];
+const academicTermStatuses = ["Planned", "Active", "Closed", "Archived"] as const satisfies readonly AcademicTermStatus[];
+const guardianRelationships = ["Mother", "Father", "Guardian", "Grandparent", "Other"] as const satisfies readonly GuardianRelationship[];
+const supportNoteVisibilities = ["TeacherOnly", "AdvisorOnly", "AdminOnly", "Shared"] as const satisfies readonly SupportNoteVisibility[];
+const attendanceStatuses = ["Present", "Absent", "Tardy", "Excused"] as const satisfies readonly AttendanceStatus[];
+
+export const interventionStatusSchema = z.enum(interventionStatuses);
+export const academicTermStatusSchema = z.enum(academicTermStatuses);
+export const guardianRelationshipSchema = z.enum(guardianRelationships);
+export const supportNoteVisibilitySchema = z.enum(supportNoteVisibilities);
+export const attendanceStatusSchema = z.enum(attendanceStatuses);
+
+/**
+ * Approvals and recommendations are *decided*, not freely set: a reviewer may
+ * only move a pending request to a terminal state. The starting states
+ * ("Requested" / "Proposed") are deliberately excluded, which is why these are
+ * typed as Exclude<...> rather than the full union — a form that tries to move
+ * a decision backwards fails to compile.
+ *
+ * This is a guard rail, not the rule. The actual transition legality still
+ * lives in canTransitionApproval() in ./approvals.ts, because "you may not
+ * re-decide something already decided" is a business rule, not a parse error.
+ */
+const approvalDecisions = ["Approved", "Rejected", "Cancelled"] as const satisfies readonly Exclude<ApprovalStatus, "Requested">[];
+const recommendationDecisions = ["Approved", "Rejected", "Completed"] as const satisfies readonly Exclude<AgentRecommendationStatus, "Proposed">[];
+
+export const approvalDecisionSchema = z.enum(approvalDecisions);
+export const recommendationDecisionSchema = z.enum(recommendationDecisions);
+
+export type InterventionStatusInput = z.infer<typeof interventionStatusSchema>;
+export type AcademicTermStatusInput = z.infer<typeof academicTermStatusSchema>;
+export type GuardianRelationshipInput = z.infer<typeof guardianRelationshipSchema>;
+export type ApprovalDecisionInput = z.infer<typeof approvalDecisionSchema>;
+export type RecommendationDecisionInput = z.infer<typeof recommendationDecisionSchema>;
 
 export type TeacherInput = z.infer<typeof teacherSchema>;
 export type StudentInput = z.infer<typeof studentSchema>;
