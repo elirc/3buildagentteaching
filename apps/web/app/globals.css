@@ -140,6 +140,30 @@
   color: var(--color-muted);
 }
 
+/*
+ * Failure banner rendered by <ActionForm>. Uses the existing danger tokens so
+ * it reads as part of the same system as the danger Badge and Stat variants
+ * rather than as a bolted-on error style.
+ *
+ * The left border rather than a full outline is deliberate: it keeps the form
+ * fields aligned with the ones above and below it, so the layout does not jump
+ * when an error appears.
+ */
+.form-error {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border-left: 3px solid var(--color-danger);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border-radius: var(--radius-sm, 4px);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.form-error strong {
+  margin-right: 0.35rem;
+}
+
 .stack {
   display: grid;
   gap: var(--space-4);
