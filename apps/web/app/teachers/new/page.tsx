@@ -1,5 +1,6 @@
 import { Card, CardHeader, Field, PageHeader } from "@agentic-edu/ui";
 import { createTeacher } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default function NewTeacherPage() {
   return (
@@ -7,7 +8,7 @@ export default function NewTeacherPage() {
       <PageHeader title="New Teacher" description="Create a teacher profile. Inactive teachers cannot be assigned to new sections." />
       <Card>
         <CardHeader title="Teacher details" />
-        <form action={createTeacher} className="stack">
+        <ActionForm action={createTeacher} className="stack">
           <div className="form-grid">
             <Field label="First name"><input name="firstName" required /></Field>
             <Field label="Last name"><input name="lastName" required /></Field>
@@ -24,10 +25,10 @@ export default function NewTeacherPage() {
             <Field label="Office location"><input name="officeLocation" /></Field>
           </div>
           <div className="form-actions">
-            <button className="ui-button ui-button--primary" type="submit">Create teacher</button>
+            <SubmitButton variant="primary">Create teacher</SubmitButton>
             <a className="ui-button ui-button--secondary" href="/teachers">Cancel</a>
           </div>
-        </form>
+        </ActionForm>
       </Card>
     </>
   );

@@ -3,6 +3,7 @@ import { prisma } from "@agentic-edu/db";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate } from "@/lib/format";
 import { enrollStudent } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function EnrollmentsPage() {
   const [enrollments, students, sections] = await Promise.all([
@@ -33,12 +34,12 @@ export default async function EnrollmentsPage() {
         </Card>
         <Card>
           <CardHeader title="Enroll Student Into Section" />
-          <form action={enrollStudent} className="stack">
+          <ActionForm action={enrollStudent} className="stack">
             <Field label="Student"><select name="studentId">{students.map((student) => <option key={student.id} value={student.id}>{student.firstName} {student.lastName} · {student.enrollmentStatus}</option>)}</select></Field>
             <Field label="Section"><select name="classSectionId">{sections.map((section) => <option key={section.id} value={section.id}>{section.course.title} · {section.term}</option>)}</select></Field>
             <label style={{ display: "flex", gap: 8, alignItems: "center" }}><input type="checkbox" name="allowWaitlist" /> Waitlist if section is full</label>
-            <button className="ui-button ui-button--primary" type="submit">Enroll</button>
-          </form>
+            <SubmitButton variant="primary">Enroll</SubmitButton>
+          </ActionForm>
         </Card>
       </div>
     </>

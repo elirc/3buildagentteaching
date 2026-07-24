@@ -3,6 +3,7 @@ import { Card, CardHeader, DataTable, Field, PageHeader } from "@agentic-edu/ui"
 import { prisma } from "@agentic-edu/db";
 import { StatusBadge } from "@/components/status-badge";
 import { dropEnrollment, enrollStudent } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function SectionRosterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,10 +28,10 @@ export default async function SectionRosterPage({ params }: { params: Promise<{ 
                   <td><StatusBadge value={enrollment.status} /></td>
                   <td>
                     {enrollment.status !== "Dropped" ? (
-                      <form action={dropEnrollment}>
+                      <ActionForm action={dropEnrollment}>
                         <input type="hidden" name="id" value={enrollment.id} />
-                        <button className="ui-button ui-button--danger" type="submit">Drop</button>
-                      </form>
+                        <SubmitButton variant="danger">Drop</SubmitButton>
+                      </ActionForm>
                     ) : null}
                   </td>
                 </tr>
@@ -41,7 +42,7 @@ export default async function SectionRosterPage({ params }: { params: Promise<{ 
 
         <Card>
           <CardHeader title="Enroll Student" />
-          <form action={enrollStudent} className="stack">
+          <ActionForm action={enrollStudent} className="stack">
             <input type="hidden" name="classSectionId" value={section.id} />
             <Field label="Student">
               <select name="studentId">
@@ -51,8 +52,8 @@ export default async function SectionRosterPage({ params }: { params: Promise<{ 
             <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input type="checkbox" name="allowWaitlist" /> Waitlist if full
             </label>
-            <button className="ui-button ui-button--primary" type="submit">Enroll student</button>
-          </form>
+            <SubmitButton variant="primary">Enroll student</SubmitButton>
+          </ActionForm>
         </Card>
       </div>
     </>

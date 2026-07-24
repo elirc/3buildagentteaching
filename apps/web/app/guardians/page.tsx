@@ -2,6 +2,7 @@ import { Card, CardHeader, DataTable, Field, PageHeader, Stat } from "@agentic-e
 import { prisma } from "@agentic-edu/db";
 import { getAcademicOperationsOverview } from "@agentic-edu/application";
 import { createGuardian, linkGuardianToStudent } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function GuardiansPage() {
   const [overview, students] = await Promise.all([
@@ -20,18 +21,18 @@ export default async function GuardiansPage() {
 
       <Card>
         <CardHeader title="Create Guardian" />
-        <form action={createGuardian} className="ui-form-grid">
+        <ActionForm action={createGuardian} className="ui-form-grid">
           <Field label="First name"><input name="firstName" required /></Field>
           <Field label="Last name"><input name="lastName" required /></Field>
           <Field label="Email"><input name="email" type="email" required /></Field>
           <Field label="Phone"><input name="phone" /></Field>
-          <button className="ui-button ui-button--primary" type="submit">Create guardian</button>
-        </form>
+          <SubmitButton variant="primary">Create guardian</SubmitButton>
+        </ActionForm>
       </Card>
 
       <Card>
         <CardHeader title="Link Guardian To Student" />
-        <form action={linkGuardianToStudent} className="ui-form-grid">
+        <ActionForm action={linkGuardianToStudent} className="ui-form-grid">
           <Field label="Student">
             <select name="studentId">
               {students.map((student) => <option key={student.id} value={student.id}>{student.firstName} {student.lastName}</option>)}
@@ -54,8 +55,8 @@ export default async function GuardiansPage() {
           <label className="ui-checkbox"><input name="isPrimary" type="checkbox" /> Primary</label>
           <label className="ui-checkbox"><input name="receivesDigest" type="checkbox" defaultChecked /> Receives digest</label>
           <label className="ui-checkbox"><input name="emergencyContact" type="checkbox" /> Emergency contact</label>
-          <button className="ui-button ui-button--secondary" type="submit">Link guardian</button>
-        </form>
+          <SubmitButton variant="secondary">Link guardian</SubmitButton>
+        </ActionForm>
       </Card>
 
       <Card>

@@ -3,6 +3,7 @@ import { Card, CardHeader, DataTable, Field, PageHeader, Stat } from "@agentic-e
 import { prisma } from "@agentic-edu/db";
 import { StatusBadge } from "@/components/status-badge";
 import { updateCourse } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function CourseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -36,7 +37,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
         </Card>
         <Card>
           <CardHeader title="Edit Course" />
-          <form action={updateCourse} className="stack">
+          <ActionForm action={updateCourse} className="stack">
             <input type="hidden" name="id" value={course.id} />
             <Field label="Code"><input name="code" defaultValue={course.code} required /></Field>
             <Field label="Title"><input name="title" defaultValue={course.title} required /></Field>
@@ -51,8 +52,8 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
               </select>
             </Field>
             <Field label="Description"><textarea name="description" defaultValue={course.description} required /></Field>
-            <button className="ui-button ui-button--primary" type="submit">Save course</button>
-          </form>
+            <SubmitButton variant="primary">Save course</SubmitButton>
+          </ActionForm>
         </Card>
       </div>
     </>

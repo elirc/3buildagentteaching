@@ -5,6 +5,7 @@ import { calculateClassAverage, calculateGradeSummary } from "@agentic-edu/domai
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, percent } from "@/lib/format";
 import { recordAttendance, runAttendanceAnomalyAgent, updateSection } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function SectionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -86,7 +87,7 @@ export default async function SectionDetailPage({ params }: { params: Promise<{ 
           </Card>
 
           <Card>
-            <CardHeader title="Attendance Records" actions={<form action={runAttendanceAnomalyAgent}><input type="hidden" name="targetType" value="ClassSection" /><input type="hidden" name="targetId" value={section.id} /><button className="ui-button ui-button--primary" type="submit">Run anomaly agent</button></form>} />
+            <CardHeader title="Attendance Records" actions={<ActionForm action={runAttendanceAnomalyAgent}><input type="hidden" name="targetType" value="ClassSection" /><input type="hidden" name="targetId" value={section.id} /><SubmitButton variant="primary">Run anomaly agent</SubmitButton></ActionForm>} />
             {anomalyRun ? <p className="muted">Latest anomaly run: <a href={`/agent-runs/${anomalyRun.id}`}>{anomalyRun.agentType}</a></p> : null}
             <DataTable>
               <thead><tr><th>Date</th><th>Student</th><th>Status</th><th>Notes</th></tr></thead>
@@ -102,7 +103,7 @@ export default async function SectionDetailPage({ params }: { params: Promise<{ 
         <div className="stack">
           <Card>
             <CardHeader title="Edit Section" />
-            <form action={updateSection} className="stack">
+            <ActionForm action={updateSection} className="stack">
               <input type="hidden" name="id" value={section.id} />
               <Field label="Course"><select name="courseId" defaultValue={section.courseId}>{courses.map((course) => <option key={course.id} value={course.id}>{course.code} - {course.title}</option>)}</select></Field>
               <Field label="Teacher"><select name="teacherId" defaultValue={section.teacherId}>{teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.firstName} {teacher.lastName}</option>)}</select></Field>
@@ -119,13 +120,13 @@ export default async function SectionDetailPage({ params }: { params: Promise<{ 
               <Field label="End"><input name="end" defaultValue={schedule.end ?? ""} required /></Field>
               <Field label="Capacity"><input name="capacity" type="number" defaultValue={section.capacity} required /></Field>
               <Field label="Status"><select name="status" defaultValue={section.status}><option value="Planned">Planned</option><option value="Active">Active</option><option value="Completed">Completed</option><option value="Cancelled">Cancelled</option></select></Field>
-              <button className="ui-button ui-button--primary" type="submit">Save section</button>
-            </form>
+              <SubmitButton variant="primary">Save section</SubmitButton>
+            </ActionForm>
           </Card>
 
           <Card>
             <CardHeader title="Daily Attendance Entry" />
-            <form action={recordAttendance} className="stack">
+            <ActionForm action={recordAttendance} className="stack">
               <input type="hidden" name="classSectionId" value={section.id} />
               <input type="hidden" name="academicTermId" value={section.academicTermId ?? ""} />
               <input type="hidden" name="recordedByTeacherId" value={section.teacherId} />
@@ -133,8 +134,8 @@ export default async function SectionDetailPage({ params }: { params: Promise<{ 
               <Field label="Date"><input name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field>
               <Field label="Status"><select name="status" defaultValue="Present"><option value="Present">Present</option><option value="Absent">Absent</option><option value="Tardy">Tardy</option><option value="Excused">Excused</option></select></Field>
               <Field label="Notes"><textarea name="notes" /></Field>
-              <button className="ui-button ui-button--primary" type="submit">Record attendance</button>
-            </form>
+              <SubmitButton variant="primary">Record attendance</SubmitButton>
+            </ActionForm>
           </Card>
         </div>
       </div>

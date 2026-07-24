@@ -3,6 +3,7 @@ import { getAgentOperationsOverview } from "@agentic-edu/application";
 import { decideAgentRecommendation } from "@/lib/actions";
 import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function AgentRecommendationsPage() {
   const overview = await getAgentOperationsOverview();
@@ -32,27 +33,27 @@ export default async function AgentRecommendationsPage() {
                   <div className="ui-actions">
                     {recommendation.status === "Proposed" ? (
                       <>
-                        <form action={decideAgentRecommendation}>
+                        <ActionForm action={decideAgentRecommendation}>
                           <input type="hidden" name="id" value={recommendation.id} />
                           <input type="hidden" name="status" value="Approved" />
                           <input type="hidden" name="rationale" value="Approved from recommendation queue." />
-                          <button className="ui-button ui-button--secondary" type="submit">Approve</button>
-                        </form>
-                        <form action={decideAgentRecommendation}>
+                          <SubmitButton variant="secondary">Approve</SubmitButton>
+                        </ActionForm>
+                        <ActionForm action={decideAgentRecommendation}>
                           <input type="hidden" name="id" value={recommendation.id} />
                           <input type="hidden" name="status" value="Rejected" />
                           <input type="hidden" name="rationale" value="Rejected from recommendation queue." />
-                          <button className="ui-button ui-button--danger" type="submit">Reject</button>
-                        </form>
+                          <SubmitButton variant="danger">Reject</SubmitButton>
+                        </ActionForm>
                       </>
                     ) : null}
                     {recommendation.status === "Approved" ? (
-                      <form action={decideAgentRecommendation}>
+                      <ActionForm action={decideAgentRecommendation}>
                         <input type="hidden" name="id" value={recommendation.id} />
                         <input type="hidden" name="status" value="Completed" />
                         <input type="hidden" name="rationale" value="Completed from recommendation queue." />
-                        <button className="ui-button ui-button--primary" type="submit">Complete</button>
-                      </form>
+                        <SubmitButton variant="primary">Complete</SubmitButton>
+                      </ActionForm>
                     ) : null}
                   </div>
                 </td>

@@ -2,6 +2,7 @@ import { Card, CardHeader, DataTable, Field, PageHeader, Stat } from "@agentic-e
 import { prisma } from "@agentic-edu/db";
 import { getAcademicOperationsOverview } from "@agentic-edu/application";
 import { createRubric, runGradingConsistencyAgent } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function RubricsPage() {
   const [overview, assignments, teachers] = await Promise.all([
@@ -21,7 +22,7 @@ export default async function RubricsPage() {
 
       <Card>
         <CardHeader title="Create Rubric" />
-        <form action={createRubric} className="ui-form-grid">
+        <ActionForm action={createRubric} className="ui-form-grid">
           <Field label="Assignment">
             <select name="assignmentId">
               <option value="">Unattached</option>
@@ -38,8 +39,8 @@ export default async function RubricsPage() {
           <Field label="Criteria" hint="Comma-separated criterion names; each defaults to 10 points.">
             <input name="criteria" placeholder="Accuracy, Reasoning, Completeness" required />
           </Field>
-          <button className="ui-button ui-button--primary" type="submit">Create rubric</button>
-        </form>
+          <SubmitButton variant="primary">Create rubric</SubmitButton>
+        </ActionForm>
       </Card>
 
       <Card>
@@ -55,10 +56,10 @@ export default async function RubricsPage() {
                 <td>{rubric.criteria.reduce((sum, criterion) => sum + criterion.pointsPossible, 0)}</td>
                 <td>
                   {rubric.assignmentId ? (
-                    <form action={runGradingConsistencyAgent}>
+                    <ActionForm action={runGradingConsistencyAgent}>
                       <input type="hidden" name="assignmentId" value={rubric.assignmentId} />
-                      <button className="ui-button ui-button--secondary" type="submit">Run grading check</button>
-                    </form>
+                      <SubmitButton variant="secondary">Run grading check</SubmitButton>
+                    </ActionForm>
                   ) : "Attach first"}
                 </td>
               </tr>

@@ -1,6 +1,7 @@
 import { Card, CardHeader, Field, PageHeader } from "@agentic-edu/ui";
 import { prisma } from "@agentic-edu/db";
 import { createSection } from "@/lib/actions";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function NewSectionPage() {
   const [courses, teachers, terms] = await Promise.all([
@@ -13,7 +14,7 @@ export default async function NewSectionPage() {
       <PageHeader title="New Class Section" description="Create a scheduled section. Domain rules require an active teacher." />
       <Card>
         <CardHeader title="Section details" />
-        <form action={createSection} className="stack">
+        <ActionForm action={createSection} className="stack">
           <div className="form-grid">
             <Field label="Course">
               <select name="courseId" required>{courses.map((course) => <option key={course.id} value={course.id}>{course.code} - {course.title}</option>)}</select>
@@ -43,10 +44,10 @@ export default async function NewSectionPage() {
             </Field>
           </div>
           <div className="form-actions">
-            <button className="ui-button ui-button--primary" type="submit">Create section</button>
+            <SubmitButton variant="primary">Create section</SubmitButton>
             <a className="ui-button ui-button--secondary" href="/sections">Cancel</a>
           </div>
-        </form>
+        </ActionForm>
       </Card>
     </>
   );

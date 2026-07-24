@@ -17,16 +17,45 @@ import {
   workerService
 } from "@agentic-edu/application";
 import {
+  academicTermStatusSchema,
+  approvalDecisionSchema,
   assignmentSchema,
   attendanceSchema,
   classSectionSchema,
   courseSchema,
+  guardianRelationshipSchema,
   interventionPlanSchema,
+  interventionStatusSchema,
+  recommendationDecisionSchema,
   studentSchema,
   supportNoteSchema,
   teacherSchema
 } from "@agentic-edu/domain";
 import { getCurrentActor } from "@/lib/current-user";
+import { runAction, type FormState } from "@/lib/action-result";
+
+/*
+ * Every action in this file has the same shape:
+ *
+ *   export async function doThing(_previous: FormState, formData: FormData) {
+ *     const result = await runAction(async () => { ...work...; return value; });
+ *     if (result.ok) redirect(...);          // only where a redirect is wanted
+ *     return result;
+ *   }
+ *
+ * Two conventions worth knowing before you add one:
+ *
+ * 1. The `_previous` first parameter is required by React's useActionState.
+ *    It holds the result of the *last* submission. None of these actions need
+ *    it — the form is the source of truth — so it is named with a leading
+ *    underscore and ignored. It cannot be omitted; the hook always passes it.
+ *
+ * 2. `redirect()` is called AFTER runAction returns, never inside it.
+ *    redirect works by throwing, so calling it inside the try block means the
+ *    catch has to recognise and re-throw it. runAction does guard against that,
+ *    but relying on the guard is fragile — keeping redirect outside means the
+ *    control flow is obvious from reading the function.
+ */
 
 function stringValue(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
@@ -48,374 +77,522 @@ function splitList(value: string): string[] {
     .filter(Boolean);
 }
 
-export async function createTeacher(formData: FormData) {
-  const actor = await getCurrentActor();
-  const teacher = await teacherService.createTeacher(actor, parseTeacher(formData));
-  revalidatePath("/teachers");
-  redirect(`/teachers/${teacher.id}`);
-}
-
-export async function updateTeacher(formData: FormData) {
-  const actor = await getCurrentActor();
-  const id = stringValue(formData, "id");
-  await teacherService.updateTeacher(actor, id, parseTeacher(formData));
-  revalidatePath(`/teachers/${id}`);
-  redirect(`/teachers/${id}`);
-}
-
-export async function createStudent(formData: FormData) {
-  const actor = await getCurrentActor();
-  const student = await studentService.createStudent(actor, parseStudent(formData));
-  revalidatePath("/students");
-  redirect(`/students/${student.id}`);
-}
-
-export async function updateStudent(formData: FormData) {
-  const actor = await getCurrentActor();
-  const id = stringValue(formData, "id");
-  await studentService.updateStudent(actor, id, parseStudent(formData));
-  revalidatePath(`/students/${id}`);
-  redirect(`/students/${id}`);
-}
-
-export async function createCourse(formData: FormData) {
-  const actor = await getCurrentActor();
-  const course = await academicService.createCourse(actor, parseCourse(formData));
-  revalidatePath("/courses");
-  redirect(`/courses/${course.id}`);
-}
-
-export async function updateCourse(formData: FormData) {
-  const actor = await getCurrentActor();
-  const id = stringValue(formData, "id");
-  await academicService.updateCourse(actor, id, parseCourse(formData));
-  revalidatePath(`/courses/${id}`);
-  redirect(`/courses/${id}`);
-}
-
-export async function createSection(formData: FormData) {
-  const actor = await getCurrentActor();
-  const section = await academicService.createSection(actor, parseSection(formData));
-  revalidatePath("/sections");
-  redirect(`/sections/${section.id}`);
-}
-
-export async function updateSection(formData: FormData) {
-  const actor = await getCurrentActor();
-  const id = stringValue(formData, "id");
-  await academicService.updateSection(actor, id, parseSection(formData));
-  revalidatePath(`/sections/${id}`);
-  redirect(`/sections/${id}`);
-}
-
-export async function enrollStudent(formData: FormData) {
-  const actor = await getCurrentActor();
-  const enrollment = await enrollmentService.enrollStudent(actor, {
-    studentId: stringValue(formData, "studentId"),
-    classSectionId: stringValue(formData, "classSectionId"),
-    allowWaitlist: formData.get("allowWaitlist") === "on"
+export async function createTeacher(_previous: FormState, formData: FormData): Promise<FormState> {
+  const result = await runAction(async () => {
+    const actor = await getCurrentActor();
+    const teacher = await teacherService.createTeacher(actor, parseTeacher(formData));
+    revalidatePath("/teachers");
+    return teacher;
   });
-  revalidatePath("/enrollments");
-  revalidatePath(`/sections/${enrollment.classSectionId}`);
-  redirect(`/sections/${enrollment.classSectionId}/roster`);
+  if (result.ok && result.data) redirect(`/teachers/${result.data.id}`);
+  return result;
 }
 
-export async function dropEnrollment(formData: FormData) {
-  const actor = await getCurrentActor();
-  await enrollmentService.dropEnrollment(actor, stringValue(formData, "id"));
-  revalidatePath("/enrollments");
-}
-
-export async function createAssignment(formData: FormData) {
-  const actor = await getCurrentActor();
-  const assignment = await assignmentService.createAssignment(actor, parseAssignment(formData));
-  revalidatePath("/assignments");
-  redirect(`/assignments/${assignment.id}`);
-}
-
-export async function updateAssignment(formData: FormData) {
-  const actor = await getCurrentActor();
-  const id = stringValue(formData, "id");
-  await assignmentService.updateAssignment(actor, id, parseAssignment(formData));
-  revalidatePath(`/assignments/${id}`);
-  redirect(`/assignments/${id}`);
-}
-
-export async function publishAssignment(formData: FormData) {
-  const actor = await getCurrentActor();
-  const id = stringValue(formData, "id");
-  await assignmentService.publishAssignment(actor, id);
-  revalidatePath(`/assignments/${id}`);
-}
-
-export async function gradeSubmission(formData: FormData) {
-  const actor = await getCurrentActor();
-  const id = stringValue(formData, "id");
-  await assignmentService.gradeSubmission(actor, {
-    id,
-    score: Number(formData.get("score")),
-    feedback: stringValue(formData, "feedback"),
-    gradedByTeacherId: stringValue(formData, "gradedByTeacherId")
+export async function updateTeacher(_previous: FormState, formData: FormData): Promise<FormState> {
+  const result = await runAction(async () => {
+    const actor = await getCurrentActor();
+    const id = stringValue(formData, "id");
+    const teacher = await teacherService.updateTeacher(actor, id, parseTeacher(formData));
+    revalidatePath(`/teachers/${id}`);
+    return teacher;
   });
-  revalidatePath(`/submissions/${id}`);
+  return result;
 }
 
-export async function createSubmission(formData: FormData) {
-  const actor = await getCurrentActor();
-  const submission = await assignmentService.submitAssignment(actor, {
-    assignmentId: stringValue(formData, "assignmentId"),
-    studentId: stringValue(formData, "studentId"),
-    contentText: stringValue(formData, "contentText"),
-    attachmentUrl: optionalString(formData, "attachmentUrl")
+export async function createStudent(_previous: FormState, formData: FormData): Promise<FormState> {
+  const result = await runAction(async () => {
+    const actor = await getCurrentActor();
+    const student = await studentService.createStudent(actor, parseStudent(formData));
+    revalidatePath("/students");
+    return student;
   });
-  revalidatePath(`/assignments/${submission.assignmentId}`);
-  redirect(`/submissions/${submission.id}`);
+  if (result.ok && result.data) redirect(`/students/${result.data.id}`);
+  return result;
 }
 
-export async function recordAttendance(formData: FormData) {
-  const actor = await getCurrentActor();
-  await attendanceService.recordAttendance(
-    actor,
-    attendanceSchema.parse({
+export async function updateStudent(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const id = stringValue(formData, "id");
+    const student = await studentService.updateStudent(actor, id, parseStudent(formData));
+    revalidatePath(`/students/${id}`);
+    return student;
+  });
+}
+
+export async function createCourse(_previous: FormState, formData: FormData): Promise<FormState> {
+  const result = await runAction(async () => {
+    const actor = await getCurrentActor();
+    const course = await academicService.createCourse(actor, parseCourse(formData));
+    revalidatePath("/courses");
+    return course;
+  });
+  if (result.ok && result.data) redirect(`/courses/${result.data.id}`);
+  return result;
+}
+
+export async function updateCourse(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const id = stringValue(formData, "id");
+    const course = await academicService.updateCourse(actor, id, parseCourse(formData));
+    revalidatePath(`/courses/${id}`);
+    return course;
+  });
+}
+
+export async function createSection(_previous: FormState, formData: FormData): Promise<FormState> {
+  const result = await runAction(async () => {
+    const actor = await getCurrentActor();
+    const section = await academicService.createSection(actor, parseSection(formData));
+    revalidatePath("/sections");
+    return section;
+  });
+  if (result.ok && result.data) redirect(`/sections/${result.data.id}`);
+  return result;
+}
+
+export async function updateSection(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const id = stringValue(formData, "id");
+    const section = await academicService.updateSection(actor, id, parseSection(formData));
+    revalidatePath(`/sections/${id}`);
+    return section;
+  });
+}
+
+export async function enrollStudent(_previous: FormState, formData: FormData): Promise<FormState> {
+  const result = await runAction(async () => {
+    const actor = await getCurrentActor();
+    const enrollment = await enrollmentService.enrollStudent(actor, {
       studentId: stringValue(formData, "studentId"),
       classSectionId: stringValue(formData, "classSectionId"),
-      academicTermId: optionalString(formData, "academicTermId"),
-      date: stringValue(formData, "date"),
+      allowWaitlist: formData.get("allowWaitlist") === "on"
+    });
+    revalidatePath("/enrollments");
+    revalidatePath(`/sections/${enrollment.classSectionId}`);
+    return enrollment;
+  });
+  if (result.ok && result.data) redirect(`/sections/${result.data.classSectionId}/roster`);
+  return result;
+}
+
+export async function dropEnrollment(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const enrollment = await enrollmentService.dropEnrollment(actor, stringValue(formData, "id"));
+    revalidatePath("/enrollments");
+    return enrollment;
+  });
+}
+
+export async function createAssignment(_previous: FormState, formData: FormData): Promise<FormState> {
+  const result = await runAction(async () => {
+    const actor = await getCurrentActor();
+    const assignment = await assignmentService.createAssignment(actor, parseAssignment(formData));
+    revalidatePath("/assignments");
+    return assignment;
+  });
+  if (result.ok && result.data) redirect(`/assignments/${result.data.id}`);
+  return result;
+}
+
+export async function updateAssignment(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const id = stringValue(formData, "id");
+    const assignment = await assignmentService.updateAssignment(actor, id, parseAssignment(formData));
+    revalidatePath(`/assignments/${id}`);
+    return assignment;
+  });
+}
+
+export async function publishAssignment(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const id = stringValue(formData, "id");
+    const assignment = await assignmentService.publishAssignment(actor, id);
+    revalidatePath(`/assignments/${id}`);
+    return assignment;
+  });
+}
+
+export async function gradeSubmission(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const id = stringValue(formData, "id");
+    const submission = await assignmentService.gradeSubmission(actor, {
+      id,
+      score: numberValue(formData, "score"),
+      feedback: stringValue(formData, "feedback"),
+      gradedByTeacherId: stringValue(formData, "gradedByTeacherId")
+    });
+    revalidatePath(`/submissions/${id}`);
+    return submission;
+  });
+}
+
+export async function createSubmission(_previous: FormState, formData: FormData): Promise<FormState> {
+  const result = await runAction(async () => {
+    const actor = await getCurrentActor();
+    const submission = await assignmentService.submitAssignment(actor, {
+      assignmentId: stringValue(formData, "assignmentId"),
+      studentId: stringValue(formData, "studentId"),
+      contentText: stringValue(formData, "contentText"),
+      attachmentUrl: optionalString(formData, "attachmentUrl")
+    });
+    revalidatePath(`/assignments/${submission.assignmentId}`);
+    return submission;
+  });
+  if (result.ok && result.data) redirect(`/submissions/${result.data.id}`);
+  return result;
+}
+
+export async function recordAttendance(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const attendance = await attendanceService.recordAttendance(
+      actor,
+      attendanceSchema.parse({
+        studentId: stringValue(formData, "studentId"),
+        classSectionId: stringValue(formData, "classSectionId"),
+        academicTermId: optionalString(formData, "academicTermId"),
+        date: stringValue(formData, "date"),
+        status: stringValue(formData, "status"),
+        notes: optionalString(formData, "notes"),
+        recordedByTeacherId: stringValue(formData, "recordedByTeacherId")
+      })
+    );
+    revalidatePath("/attendance");
+    return attendance;
+  });
+}
+
+export async function createSupportNote(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const input = supportNoteSchema.parse({
+      studentId: stringValue(formData, "studentId"),
+      authorUserId: actor.id,
+      visibility: stringValue(formData, "visibility"),
+      noteType: stringValue(formData, "noteType"),
+      content: stringValue(formData, "content")
+    });
+    const note = await supportService.createSupportNote(actor, input);
+    revalidatePath(`/students/${input.studentId}`);
+    revalidatePath("/interventions");
+    return note;
+  });
+}
+
+export async function createInterventionPlan(_previous: FormState, formData: FormData): Promise<FormState> {
+  const result = await runAction(async () => {
+    const actor = await getCurrentActor();
+    const input = interventionPlanSchema.parse({
+      studentId: stringValue(formData, "studentId"),
+      createdByUserId: actor.id,
       status: stringValue(formData, "status"),
-      notes: optionalString(formData, "notes"),
-      recordedByTeacherId: stringValue(formData, "recordedByTeacherId")
-    })
-  );
-  revalidatePath("/attendance");
-}
-
-export async function createSupportNote(formData: FormData) {
-  const actor = await getCurrentActor();
-  const input = supportNoteSchema.parse({
-    studentId: stringValue(formData, "studentId"),
-    authorUserId: actor.id,
-    visibility: stringValue(formData, "visibility"),
-    noteType: stringValue(formData, "noteType"),
-    content: stringValue(formData, "content")
+      riskArea: stringValue(formData, "riskArea"),
+      summary: stringValue(formData, "summary"),
+      recommendedActions: splitList(stringValue(formData, "recommendedActions")),
+      followUpDate: stringValue(formData, "followUpDate")
+    });
+    const plan = await supportService.createInterventionPlan(actor, input);
+    revalidatePath(`/students/${input.studentId}`);
+    revalidatePath("/interventions");
+    return plan;
   });
-  await supportService.createSupportNote(actor, input);
-  revalidatePath(`/students/${input.studentId}`);
-  revalidatePath("/interventions");
+  if (result.ok && result.data) redirect(`/students/${result.data.studentId}`);
+  return result;
 }
 
-export async function createInterventionPlan(formData: FormData) {
-  const actor = await getCurrentActor();
-  const input = interventionPlanSchema.parse({
-    studentId: stringValue(formData, "studentId"),
-    createdByUserId: actor.id,
-    status: stringValue(formData, "status"),
-    riskArea: stringValue(formData, "riskArea"),
-    summary: stringValue(formData, "summary"),
-    recommendedActions: splitList(stringValue(formData, "recommendedActions")),
-    followUpDate: stringValue(formData, "followUpDate")
+export async function updateInterventionStatus(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const status = interventionStatusSchema.parse(stringValue(formData, "status"));
+    const plan = await supportService.updateInterventionStatus(actor, stringValue(formData, "id"), status);
+    revalidatePath("/interventions");
+    revalidatePath(`/students/${plan.studentId}`);
+    return plan;
   });
-  await supportService.createInterventionPlan(actor, input);
-  revalidatePath(`/students/${input.studentId}`);
-  revalidatePath("/interventions");
-  redirect(`/students/${input.studentId}`);
 }
 
-export async function updateInterventionStatus(formData: FormData) {
-  const actor = await getCurrentActor();
-  const plan = await supportService.updateInterventionStatus(actor, stringValue(formData, "id"), stringValue(formData, "status") as never);
-  revalidatePath("/interventions");
-  revalidatePath(`/students/${plan.studentId}`);
-}
-
-export async function retryBackgroundJob(formData: FormData) {
-  const actor = await getCurrentActor();
-  const id = stringValue(formData, "id");
-  await jobService.retryBackgroundJob(actor, id);
-  revalidatePath(`/jobs/${id}`);
-}
-
-export async function deadLetterBackgroundJob(formData: FormData) {
-  const actor = await getCurrentActor();
-  const id = stringValue(formData, "id");
-  await jobService.deadLetterBackgroundJob(actor, id);
-  revalidatePath(`/jobs/${id}`);
-}
-
-export async function runStudentProgressAgent(formData: FormData) {
-  const actor = await getCurrentActor();
-  const studentId = stringValue(formData, "studentId");
-  await agentRunService.runStudentProgressAgent(actor, studentId);
-  revalidatePath(`/students/${studentId}`);
-}
-
-export async function runAtRiskAgent(formData: FormData) {
-  const actor = await getCurrentActor();
-  const studentId = stringValue(formData, "studentId");
-  await agentRunService.runAtRiskAgent(actor, studentId);
-  revalidatePath(`/students/${studentId}`);
-  revalidatePath("/at-risk");
-}
-
-export async function runAssignmentFeedbackAgent(formData: FormData) {
-  const actor = await getCurrentActor();
-  const submissionId = stringValue(formData, "submissionId");
-  await agentRunService.runAssignmentFeedbackAgent(actor, submissionId);
-  revalidatePath(`/submissions/${submissionId}`);
-}
-
-export async function runAttendanceAnomalyAgent(formData: FormData) {
-  const actor = await getCurrentActor();
-  const targetType = stringValue(formData, "targetType") as "Student" | "ClassSection";
-  const targetId = stringValue(formData, "targetId");
-  await agentRunService.runAttendanceAnomalyAgent(actor, { targetType, targetId });
-  revalidatePath("/attendance");
-  if (targetType === "Student") revalidatePath(`/students/${targetId}`);
-}
-
-export async function runTeacherWorkloadAgent(formData: FormData) {
-  const actor = await getCurrentActor();
-  const teacherId = stringValue(formData, "teacherId");
-  await agentRunService.runTeacherWorkloadAgent(actor, teacherId);
-  revalidatePath(`/teachers/${teacherId}`);
-}
-
-export async function runFailedJobInvestigationAgent(formData: FormData) {
-  const actor = await getCurrentActor();
-  const jobId = stringValue(formData, "jobId");
-  await agentRunService.runFailedJobInvestigationAgent(actor, jobId);
-  revalidatePath(`/jobs/${jobId}`);
-}
-
-export async function createAcademicTerm(formData: FormData) {
-  const actor = await getCurrentActor();
-  await academicOperationsService.createAcademicTerm(actor, {
-    name: stringValue(formData, "name"),
-    status: stringValue(formData, "status") as never,
-    startsAt: new Date(stringValue(formData, "startsAt")),
-    endsAt: new Date(stringValue(formData, "endsAt"))
+export async function retryBackgroundJob(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const id = stringValue(formData, "id");
+    const job = await jobService.retryBackgroundJob(actor, id);
+    revalidatePath(`/jobs/${id}`);
+    return job;
   });
-  revalidatePath("/terms");
 }
 
-export async function createGradingPeriod(formData: FormData) {
-  const actor = await getCurrentActor();
-  await academicOperationsService.createGradingPeriod(actor, {
-    academicTermId: stringValue(formData, "academicTermId"),
-    name: stringValue(formData, "name"),
-    startsAt: new Date(stringValue(formData, "startsAt")),
-    endsAt: new Date(stringValue(formData, "endsAt")),
-    weight: Number(formData.get("weight") ?? 1)
+export async function deadLetterBackgroundJob(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const id = stringValue(formData, "id");
+    const job = await jobService.deadLetterBackgroundJob(actor, id);
+    revalidatePath(`/jobs/${id}`);
+    return job;
   });
-  revalidatePath("/terms");
 }
 
-export async function createGuardian(formData: FormData) {
-  const actor = await getCurrentActor();
-  await academicOperationsService.createGuardian(actor, {
-    userId: optionalString(formData, "userId"),
-    firstName: stringValue(formData, "firstName"),
-    lastName: stringValue(formData, "lastName"),
-    email: stringValue(formData, "email"),
-    phone: optionalString(formData, "phone")
+export async function runStudentProgressAgent(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const studentId = stringValue(formData, "studentId");
+    const run = await agentRunService.runStudentProgressAgent(actor, studentId);
+    revalidatePath(`/students/${studentId}`);
+    return run;
   });
-  revalidatePath("/guardians");
 }
 
-export async function linkGuardianToStudent(formData: FormData) {
-  const actor = await getCurrentActor();
-  await academicOperationsService.linkGuardianToStudent(actor, {
-    studentId: stringValue(formData, "studentId"),
-    guardianId: stringValue(formData, "guardianId"),
-    relationship: stringValue(formData, "relationship") as never,
-    isPrimary: formData.get("isPrimary") === "on",
-    receivesDigest: formData.get("receivesDigest") === "on",
-    emergencyContact: formData.get("emergencyContact") === "on"
+export async function runAtRiskAgent(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const studentId = stringValue(formData, "studentId");
+    const run = await agentRunService.runAtRiskAgent(actor, studentId);
+    revalidatePath(`/students/${studentId}`);
+    revalidatePath("/at-risk");
+    return run;
   });
-  revalidatePath("/guardians");
 }
 
-export async function createRubric(formData: FormData) {
-  const actor = await getCurrentActor();
-  await academicOperationsService.createRubric(actor, {
-    assignmentId: optionalString(formData, "assignmentId"),
-    title: stringValue(formData, "title"),
-    description: optionalString(formData, "description"),
-    createdByTeacherId: stringValue(formData, "createdByTeacherId"),
-    criteria: splitList(stringValue(formData, "criteria")).map((title, index) => ({
-      title,
-      description: `${title} criterion`,
-      pointsPossible: Number(formData.get(`points_${index}`) ?? 10),
-      sortOrder: index + 1
-    }))
+export async function runAssignmentFeedbackAgent(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const submissionId = stringValue(formData, "submissionId");
+    const run = await agentRunService.runAssignmentFeedbackAgent(actor, submissionId);
+    revalidatePath(`/submissions/${submissionId}`);
+    return run;
   });
-  revalidatePath("/rubrics");
 }
 
-export async function markNotificationRead(formData: FormData) {
-  const actor = await getCurrentActor();
-  await academicOperationsService.markNotificationRead(actor, stringValue(formData, "id"));
-  revalidatePath("/notifications");
+export async function runAttendanceAnomalyAgent(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    // Only two of the seven AgentTargetType values are meaningful here, so this
+    // is a narrow inline union rather than a shared schema.
+    const targetType = z2TargetType(stringValue(formData, "targetType"));
+    const targetId = stringValue(formData, "targetId");
+    const run = await agentRunService.runAttendanceAnomalyAgent(actor, { targetType, targetId });
+    revalidatePath("/attendance");
+    if (targetType === "Student") revalidatePath(`/students/${targetId}`);
+    return run;
+  });
 }
 
-export async function requestInterventionApproval(formData: FormData) {
-  const actor = await getCurrentActor();
-  await academicOperationsService.requestInterventionApproval(actor, stringValue(formData, "interventionPlanId"));
-  revalidatePath("/approvals");
-  revalidatePath("/interventions");
+export async function runTeacherWorkloadAgent(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const teacherId = stringValue(formData, "teacherId");
+    const run = await agentRunService.runTeacherWorkloadAgent(actor, teacherId);
+    revalidatePath(`/teachers/${teacherId}`);
+    return run;
+  });
 }
 
-export async function decideInterventionApproval(formData: FormData) {
-  const actor = await getCurrentActor();
-  await academicOperationsService.decideInterventionApproval(
-    actor,
-    stringValue(formData, "id"),
-    stringValue(formData, "status") as never,
-    optionalString(formData, "rationale")
-  );
-  revalidatePath("/approvals");
+export async function runFailedJobInvestigationAgent(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const jobId = stringValue(formData, "jobId");
+    const run = await agentRunService.runFailedJobInvestigationAgent(actor, jobId);
+    revalidatePath(`/jobs/${jobId}`);
+    return run;
+  });
 }
 
-export async function runGuardianCommunicationDraftAgent(formData: FormData) {
-  const actor = await getCurrentActor();
-  const studentId = stringValue(formData, "studentId");
-  await agentRunService.runGuardianCommunicationDraftAgent(actor, studentId);
-  revalidatePath(`/students/${studentId}`);
-  revalidatePath("/agent-ops");
+export async function createAcademicTerm(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const term = await academicOperationsService.createAcademicTerm(actor, {
+      name: stringValue(formData, "name"),
+      status: academicTermStatusSchema.parse(stringValue(formData, "status")),
+      startsAt: new Date(stringValue(formData, "startsAt")),
+      endsAt: new Date(stringValue(formData, "endsAt"))
+    });
+    revalidatePath("/terms");
+    return term;
+  });
 }
 
-export async function runGradingConsistencyAgent(formData: FormData) {
-  const actor = await getCurrentActor();
-  const assignmentId = stringValue(formData, "assignmentId");
-  await agentRunService.runGradingConsistencyAgent(actor, assignmentId);
-  revalidatePath(`/assignments/${assignmentId}`);
-  revalidatePath("/agent-ops");
+export async function createGradingPeriod(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const period = await academicOperationsService.createGradingPeriod(actor, {
+      academicTermId: stringValue(formData, "academicTermId"),
+      name: stringValue(formData, "name"),
+      startsAt: new Date(stringValue(formData, "startsAt")),
+      endsAt: new Date(stringValue(formData, "endsAt")),
+      weight: Number(formData.get("weight") ?? 1)
+    });
+    revalidatePath("/terms");
+    return period;
+  });
 }
 
-export async function runStudentSuccessReviewAgent(formData: FormData) {
-  const actor = await getCurrentActor();
-  const studentId = stringValue(formData, "studentId");
-  await agentRunService.runStudentSuccessReviewAgent(actor, studentId);
-  revalidatePath(`/students/${studentId}`);
-  revalidatePath("/agent-ops");
+export async function createGuardian(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const guardian = await academicOperationsService.createGuardian(actor, {
+      userId: optionalString(formData, "userId"),
+      firstName: stringValue(formData, "firstName"),
+      lastName: stringValue(formData, "lastName"),
+      email: stringValue(formData, "email"),
+      phone: optionalString(formData, "phone")
+    });
+    revalidatePath("/guardians");
+    return guardian;
+  });
 }
 
-export async function decideAgentRecommendation(formData: FormData) {
-  const actor = await getCurrentActor();
-  await agentOperationsService.decideRecommendation(
-    actor,
-    stringValue(formData, "id"),
-    stringValue(formData, "status") as never,
-    optionalString(formData, "rationale")
-  );
-  revalidatePath("/agent-recommendations");
-  revalidatePath("/agent-ops");
+export async function linkGuardianToStudent(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const link = await academicOperationsService.linkGuardianToStudent(actor, {
+      studentId: stringValue(formData, "studentId"),
+      guardianId: stringValue(formData, "guardianId"),
+      relationship: guardianRelationshipSchema.parse(stringValue(formData, "relationship")),
+      isPrimary: formData.get("isPrimary") === "on",
+      receivesDigest: formData.get("receivesDigest") === "on",
+      emergencyContact: formData.get("emergencyContact") === "on"
+    });
+    revalidatePath("/guardians");
+    return link;
+  });
 }
 
-export async function runNextWorkerJob() {
-  const actor = await getCurrentActor();
-  await workerService.runNextJob(actor);
-  revalidatePath("/worker-jobs");
-  revalidatePath("/jobs");
+export async function createRubric(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const rubric = await academicOperationsService.createRubric(actor, {
+      assignmentId: optionalString(formData, "assignmentId"),
+      title: stringValue(formData, "title"),
+      description: optionalString(formData, "description"),
+      createdByTeacherId: stringValue(formData, "createdByTeacherId"),
+      criteria: splitList(stringValue(formData, "criteria")).map((title, index) => ({
+        title,
+        description: `${title} criterion`,
+        pointsPossible: Number(formData.get(`points_${index}`) ?? 10),
+        sortOrder: index + 1
+      }))
+    });
+    revalidatePath("/rubrics");
+    return rubric;
+  });
+}
+
+export async function markNotificationRead(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const notification = await academicOperationsService.markNotificationRead(actor, stringValue(formData, "id"));
+    revalidatePath("/notifications");
+    return notification;
+  });
+}
+
+export async function requestInterventionApproval(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const approval = await academicOperationsService.requestInterventionApproval(
+      actor,
+      stringValue(formData, "interventionPlanId")
+    );
+    revalidatePath("/approvals");
+    revalidatePath("/interventions");
+    return approval;
+  });
+}
+
+export async function decideInterventionApproval(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const status = approvalDecisionSchema.parse(stringValue(formData, "status"));
+    const approval = await academicOperationsService.decideInterventionApproval(
+      actor,
+      stringValue(formData, "id"),
+      status,
+      optionalString(formData, "rationale")
+    );
+    revalidatePath("/approvals");
+    return approval;
+  });
+}
+
+export async function runGuardianCommunicationDraftAgent(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const studentId = stringValue(formData, "studentId");
+    const run = await agentRunService.runGuardianCommunicationDraftAgent(actor, studentId);
+    revalidatePath(`/students/${studentId}`);
+    revalidatePath("/agent-ops");
+    return run;
+  });
+}
+
+export async function runGradingConsistencyAgent(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const assignmentId = stringValue(formData, "assignmentId");
+    const run = await agentRunService.runGradingConsistencyAgent(actor, assignmentId);
+    revalidatePath(`/assignments/${assignmentId}`);
+    revalidatePath("/agent-ops");
+    return run;
+  });
+}
+
+export async function runStudentSuccessReviewAgent(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const studentId = stringValue(formData, "studentId");
+    const run = await agentRunService.runStudentSuccessReviewAgent(actor, studentId);
+    revalidatePath(`/students/${studentId}`);
+    revalidatePath("/agent-ops");
+    return run;
+  });
+}
+
+export async function decideAgentRecommendation(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const status = recommendationDecisionSchema.parse(stringValue(formData, "status"));
+    const recommendation = await agentOperationsService.decideRecommendation(
+      actor,
+      stringValue(formData, "id"),
+      status,
+      optionalString(formData, "rationale")
+    );
+    revalidatePath("/agent-recommendations");
+    revalidatePath("/agent-ops");
+    return recommendation;
+  });
+}
+
+export async function runNextWorkerJob(_previous: FormState, _formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const job = await workerService.runNextJob(actor);
+    revalidatePath("/worker-jobs");
+    revalidatePath("/jobs");
+    // null is a legitimate result: it means the queue is empty, which is not an
+    // error. The UI distinguishes "nothing to do" from "something went wrong".
+    return job;
+  });
+}
+
+/**
+ * The attendance anomaly agent accepts only two of the seven AgentTargetType
+ * values. Rather than add a schema to the domain package for a union used in
+ * exactly one place, this narrows inline and throws the same shape a Zod parse
+ * would — actionFailure maps it to VALIDATION_ERROR either way.
+ */
+function z2TargetType(value: string): "Student" | "ClassSection" {
+  if (value === "Student" || value === "ClassSection") return value;
+  throw Object.assign(new Error("Invalid target type"), {
+    name: "ZodError",
+    issues: [{ message: "Target must be a student or a class section.", path: ["targetType"] }]
+  });
 }
 
 function parseTeacher(formData: FormData) {
