@@ -1,0 +1,772 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  Admin
+  SchoolManager
+  Teacher
+  Student
+  Advisor
+  Guardian
+  Viewer
+}
+
+enum EmploymentStatus {
+  Active
+  OnLeave
+  Inactive
+}
+
+enum StudentEnrollmentStatus {
+  Active
+  Probation
+  Withdrawn
+  Graduated
+}
+
+enum CourseStatus {
+  Draft
+  Active
+  Archived
+}
+
+enum ClassSectionStatus {
+  Planned
+  Active
+  Completed
+  Cancelled
+}
+
+enum AcademicTermStatus {
+  Planned
+  Active
+  Closed
+  Archived
+}
+
+enum EnrollmentStatus {
+  Enrolled
+  Dropped
+  Completed
+  Waitlisted
+}
+
+enum AssignmentType {
+  Homework
+  Quiz
+  Exam
+  Project
+  Discussion
+  Lab
+  Other
+}
+
+enum AssignmentStatus {
+  Draft
+  Published
+  Closed
+}
+
+enum SubmissionStatus {
+  NotStarted
+  Submitted
+  Late
+  Missing
+  Graded
+  Returned
+}
+
+enum AttendanceStatus {
+  Present
+  Absent
+  Tardy
+  Excused
+}
+
+enum SupportNoteVisibility {
+  TeacherOnly
+  AdvisorOnly
+  AdminOnly
+  Shared
+}
+
+enum SupportNoteType {
+  Academic
+  Attendance
+  Behavior
+  FamilyCommunication
+  Other
+}
+
+enum InterventionStatus {
+  Draft
+  Active
+  Completed
+  Cancelled
+}
+
+enum RiskArea {
+  Grades
+  Attendance
+  Engagement
+  Behavior
+  Other
+}
+
+enum AppEnvironment {
+  development
+  staging
+  production
+}
+
+enum LogLevel {
+  debug
+  info
+  warn
+  error
+  fatal
+}
+
+enum JobType {
+  EmailNotification
+  GradeRecalculation
+  AttendanceSummary
+  ReportGeneration
+  EnrollmentSync
+  GuardianDigest
+  AgentRun
+}
+
+enum JobStatus {
+  Queued
+  Running
+  Succeeded
+  Failed
+  Retrying
+  DeadLettered
+}
+
+enum AgentType {
+  StudentProgressSummary
+  AtRiskStudentDetection
+  AssignmentFeedback
+  AttendanceAnomaly
+  TeacherWorkloadInsight
+  FailedJobInvestigation
+  GuardianCommunicationDraft
+  GradingConsistency
+  StudentSuccessReview
+}
+
+enum AgentRunStatus {
+  Pending
+  Running
+  Succeeded
+  Failed
+}
+
+enum AgentTargetType {
+  Student
+  Teacher
+  ClassSection
+  Assignment
+  Submission
+  LogGroup
+  Job
+}
+
+enum GuardianRelationship {
+  Mother
+  Father
+  Guardian
+  Grandparent
+  Other
+}
+
+enum NotificationChannel {
+  InApp
+  Email
+  Digest
+}
+
+enum NotificationType {
+  AssignmentDue
+  GradePosted
+  AttendanceConcern
+  InterventionUpdate
+  JobFailure
+  AgentRecommendation
+}
+
+enum NotificationStatus {
+  Queued
+  Delivered
+  Read
+  Failed
+}
+
+enum ApprovalStatus {
+  Requested
+  Approved
+  Rejected
+  Cancelled
+}
+
+enum AgentRecommendationStatus {
+  Proposed
+  Approved
+  Rejected
+  Completed
+}
+
+model User {
+  id                String             @id @default(cuid())
+  name              String
+  email             String             @unique
+  role              UserRole
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  teacher           Teacher?
+  student           Student?
+  advisedStudents   Student[]          @relation("AdvisorStudents")
+  supportNotes      SupportNote[]
+  interventionPlans InterventionPlan[]
+  auditEvents       AuditEvent[]
+  agentRuns         AgentRun[]
+  guardianProfile   Guardian?
+  notifications     Notification[]
+  approvalsRequested InterventionApproval[] @relation("ApprovalRequester")
+  approvalsReviewed  InterventionApproval[] @relation("ApprovalReviewer")
+  approvedAgentRecommendations AgentRecommendation[] @relation("RecommendationApprover")
+}
+
+model Teacher {
+  id                 String          @id @default(cuid())
+  userId             String?         @unique
+  user               User?           @relation(fields: [userId], references: [id])
+  firstName          String
+  lastName           String
+  email              String          @unique
+  department         String
+  employmentStatus   EmploymentStatus
+  subjectsTaught     String[]
+  officeLocation     String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  sections           ClassSection[]
+  assignmentsCreated Assignment[]
+  rubricsCreated     Rubric[]
+  submissionsGraded  Submission[]
+  attendanceRecords  AttendanceRecord[]
+  jobs               BackgroundJob[]
+
+  @@index([department])
+  @@index([employmentStatus])
+}
+
+model Student {
+  id               String                  @id @default(cuid())
+  userId           String?                 @unique
+  user             User?                   @relation(fields: [userId], references: [id])
+  firstName        String
+  lastName         String
+  email            String                  @unique
+  gradeLevel       Int
+  enrollmentStatus StudentEnrollmentStatus
+  studentNumber    String                  @unique
+  guardianName     String
+  guardianEmail    String
+  advisorId        String?
+  advisor          User?                   @relation("AdvisorStudents", fields: [advisorId], references: [id])
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  enrollments      Enrollment[]
+  submissions      Submission[]
+  attendanceRecords AttendanceRecord[]
+  supportNotes     SupportNote[]
+  interventionPlans InterventionPlan[]
+  jobs             BackgroundJob[]
+  guardians        StudentGuardian[]
+  notifications    Notification[]
+
+  @@index([gradeLevel])
+  @@index([enrollmentStatus])
+  @@index([advisorId])
+}
+
+model Course {
+  id          String       @id @default(cuid())
+  code        String       @unique
+  title       String
+  description String
+  subject     String
+  gradeLevel  Int
+  creditHours Float
+  status      CourseStatus
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  sections    ClassSection[]
+
+  @@index([subject])
+  @@index([status])
+}
+
+model AcademicTerm {
+  id              String             @id @default(cuid())
+  name            String             @unique
+  status          AcademicTermStatus
+  startsAt        DateTime
+  endsAt          DateTime
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  sections        ClassSection[]
+  gradingPeriods  GradingPeriod[]
+  attendanceRecords AttendanceRecord[]
+
+  @@index([status])
+  @@index([startsAt, endsAt])
+}
+
+model GradingPeriod {
+  id             String       @id @default(cuid())
+  academicTermId String
+  academicTerm   AcademicTerm @relation(fields: [academicTermId], references: [id])
+  name           String
+  startsAt       DateTime
+  endsAt         DateTime
+  weight         Float        @default(1)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  assignments    Assignment[]
+
+  @@index([academicTermId])
+  @@unique([academicTermId, name])
+}
+
+model ClassSection {
+  id                String             @id @default(cuid())
+  courseId          String
+  course            Course             @relation(fields: [courseId], references: [id])
+  teacherId         String
+  teacher           Teacher            @relation(fields: [teacherId], references: [id])
+  academicTermId    String?
+  academicTerm      AcademicTerm?      @relation(fields: [academicTermId], references: [id])
+  term              String
+  room              String
+  schedule          Json
+  capacity          Int
+  status            ClassSectionStatus
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  enrollments       Enrollment[]
+  assignments       Assignment[]
+  attendanceRecords AttendanceRecord[]
+  jobs              BackgroundJob[]
+
+  @@index([courseId])
+  @@index([teacherId])
+  @@index([academicTermId])
+  @@index([status])
+}
+
+model Enrollment {
+  id             String           @id @default(cuid())
+  studentId      String
+  student        Student          @relation(fields: [studentId], references: [id])
+  classSectionId String
+  classSection   ClassSection     @relation(fields: [classSectionId], references: [id])
+  status         EnrollmentStatus
+  enrolledAt     DateTime         @default(now())
+  droppedAt      DateTime?
+  finalGrade     String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([studentId, classSectionId])
+  @@index([status])
+}
+
+model Assignment {
+  id                 String           @id @default(cuid())
+  classSectionId     String
+  classSection       ClassSection     @relation(fields: [classSectionId], references: [id])
+  gradingPeriodId    String?
+  gradingPeriod      GradingPeriod?   @relation(fields: [gradingPeriodId], references: [id])
+  title              String
+  description        String
+  type               AssignmentType
+  status             AssignmentStatus
+  dueDate            DateTime
+  pointsPossible     Float
+  createdByTeacherId String
+  createdByTeacher   Teacher          @relation(fields: [createdByTeacherId], references: [id])
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  submissions        Submission[]
+  jobs               BackgroundJob[]
+  rubric             Rubric?
+
+  @@index([classSectionId])
+  @@index([gradingPeriodId])
+  @@index([status])
+}
+
+model Submission {
+  id                String           @id @default(cuid())
+  assignmentId      String
+  assignment        Assignment       @relation(fields: [assignmentId], references: [id])
+  studentId         String
+  student           Student          @relation(fields: [studentId], references: [id])
+  status            SubmissionStatus
+  submittedAt       DateTime?
+  contentText       String?
+  attachmentUrl     String?
+  score             Float?
+  feedback          String?
+  gradedByTeacherId String?
+  gradedByTeacher   Teacher?         @relation(fields: [gradedByTeacherId], references: [id])
+  gradedAt          DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  criterionScores   SubmissionCriterionScore[]
+
+  @@unique([assignmentId, studentId])
+  @@index([status])
+}
+
+model Rubric {
+  id                 String            @id @default(cuid())
+  assignmentId       String?           @unique
+  assignment         Assignment?       @relation(fields: [assignmentId], references: [id])
+  title              String
+  description        String?
+  createdByTeacherId String
+  createdByTeacher   Teacher           @relation(fields: [createdByTeacherId], references: [id])
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  criteria           RubricCriterion[]
+
+  @@index([createdByTeacherId])
+}
+
+model RubricCriterion {
+  id             String                     @id @default(cuid())
+  rubricId       String
+  rubric         Rubric                     @relation(fields: [rubricId], references: [id])
+  title          String
+  description    String
+  pointsPossible Float
+  sortOrder      Int
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  criterionScores SubmissionCriterionScore[]
+
+  @@index([rubricId])
+}
+
+model SubmissionCriterionScore {
+  id          String          @id @default(cuid())
+  submissionId String
+  submission   Submission     @relation(fields: [submissionId], references: [id])
+  criterionId  String
+  criterion    RubricCriterion @relation(fields: [criterionId], references: [id])
+  score        Float
+  feedback     String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([submissionId, criterionId])
+  @@index([criterionId])
+}
+
+model AttendanceRecord {
+  id                 String           @id @default(cuid())
+  studentId          String
+  student            Student          @relation(fields: [studentId], references: [id])
+  classSectionId     String
+  classSection       ClassSection     @relation(fields: [classSectionId], references: [id])
+  academicTermId     String?
+  academicTerm       AcademicTerm?    @relation(fields: [academicTermId], references: [id])
+  date               DateTime
+  status             AttendanceStatus
+  notes              String?
+  recordedByTeacherId String
+  recordedByTeacher  Teacher          @relation(fields: [recordedByTeacherId], references: [id])
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([studentId, classSectionId, date])
+  @@index([status])
+  @@index([academicTermId])
+}
+
+model Guardian {
+  id             String            @id @default(cuid())
+  userId         String?           @unique
+  user           User?             @relation(fields: [userId], references: [id])
+  firstName      String
+  lastName       String
+  email          String            @unique
+  phone          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  students       StudentGuardian[]
+}
+
+model StudentGuardian {
+  id               String               @id @default(cuid())
+  studentId        String
+  student          Student              @relation(fields: [studentId], references: [id])
+  guardianId       String
+  guardian         Guardian             @relation(fields: [guardianId], references: [id])
+  relationship     GuardianRelationship
+  isPrimary        Boolean              @default(false)
+  receivesDigest   Boolean              @default(true)
+  emergencyContact Boolean              @default(false)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@unique([studentId, guardianId])
+  @@index([guardianId])
+}
+
+model SupportNote {
+  id          String                @id @default(cuid())
+  studentId   String
+  student     Student               @relation(fields: [studentId], references: [id])
+  authorUserId String
+  author      User                  @relation(fields: [authorUserId], references: [id])
+  visibility  SupportNoteVisibility
+  noteType    SupportNoteType
+  content     String
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@index([studentId])
+  @@index([visibility])
+}
+
+model InterventionPlan {
+  id                 String             @id @default(cuid())
+  studentId           String
+  student             Student            @relation(fields: [studentId], references: [id])
+  createdByUserId     String
+  createdBy           User               @relation(fields: [createdByUserId], references: [id])
+  status              InterventionStatus
+  riskArea            RiskArea
+  summary             String
+  recommendedActions  String[]
+  followUpDate        DateTime
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  approvals           InterventionApproval[]
+
+  @@index([studentId])
+  @@index([status])
+}
+
+model InterventionApproval {
+  id                 String           @id @default(cuid())
+  interventionPlanId String
+  interventionPlan   InterventionPlan @relation(fields: [interventionPlanId], references: [id])
+  requestedByUserId  String
+  requestedBy        User             @relation("ApprovalRequester", fields: [requestedByUserId], references: [id])
+  reviewedByUserId   String?
+  reviewedBy         User?            @relation("ApprovalReviewer", fields: [reviewedByUserId], references: [id])
+  status             ApprovalStatus
+  rationale          String?
+  reviewedAt         DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([interventionPlanId])
+  @@index([status])
+}
+
+model Notification {
+  id          String             @id @default(cuid())
+  userId      String?
+  user        User?              @relation(fields: [userId], references: [id])
+  studentId   String?
+  student     Student?           @relation(fields: [studentId], references: [id])
+  type        NotificationType
+  channel     NotificationChannel
+  status      NotificationStatus
+  title       String
+  body        String
+  metadata    Json
+  readAt      DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([studentId])
+  @@index([status])
+  @@index([type])
+}
+
+model StructuredLog {
+  id          String         @id @default(cuid())
+  timestamp   DateTime       @default(now())
+  service     String
+  environment AppEnvironment
+  level       LogLevel
+  message     String
+  requestId   String?
+  userId      String?
+  entityType  String?
+  entityId    String?
+  metadata    Json
+  fingerprint String
+
+  @@index([timestamp])
+  @@index([level])
+  @@index([fingerprint])
+  @@index([entityType, entityId])
+}
+
+model BackgroundJob {
+  id                    String       @id @default(cuid())
+  type                  JobType
+  status                JobStatus
+  attempts              Int
+  maxAttempts           Int
+  payload               Json
+  errorMessage          String?
+  idempotencyKey        String?      @unique
+  scheduledFor          DateTime?
+  nextRunAt             DateTime?
+  lockedAt              DateTime?
+  lockOwner             String?
+  ignoredAt             DateTime?
+  startedAt             DateTime?
+  finishedAt            DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  relatedStudentId      String?
+  relatedStudent        Student?      @relation(fields: [relatedStudentId], references: [id])
+  relatedTeacherId      String?
+  relatedTeacher        Teacher?      @relation(fields: [relatedTeacherId], references: [id])
+  relatedClassSectionId String?
+  relatedClassSection   ClassSection? @relation(fields: [relatedClassSectionId], references: [id])
+  relatedAssignmentId   String?
+  relatedAssignment     Assignment?   @relation(fields: [relatedAssignmentId], references: [id])
+  workerLock            WorkerLock?
+
+  @@index([status])
+  @@index([type])
+  @@index([nextRunAt])
+}
+
+model AgentRun {
+  id              String          @id @default(cuid())
+  agentType       AgentType
+  status          AgentRunStatus
+  agentVersion    String?
+  inputSchemaVersion String?
+  outputSchemaVersion String?
+  targetType      AgentTargetType
+  targetId        String
+  inputSnapshot   Json
+  output          Json?
+  confidenceScore Float?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  errorMessage    String?
+  createdByUserId String?
+  createdBy       User?           @relation(fields: [createdByUserId], references: [id])
+  trace           Json
+  createdAt       DateTime        @default(now())
+  recommendations AgentRecommendation[]
+
+  @@index([agentType])
+  @@index([targetType, targetId])
+  @@index([status])
+}
+
+model AgentManifest {
+  id                  String    @id @default(cuid())
+  agentType           AgentType
+  version             String
+  name                String
+  description         String
+  supportedTargets    String[]
+  requiredPermissions String[]
+  inputSchema         Json
+  outputSchema        Json
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([agentType, version])
+  @@index([isActive])
+}
+
+model AgentRecommendation {
+  id               String                    @id @default(cuid())
+  agentRunId        String
+  agentRun          AgentRun                  @relation(fields: [agentRunId], references: [id])
+  status            AgentRecommendationStatus
+  ownerRole         String
+  action            String
+  priority          Int
+  rationale         String?
+  approvedByUserId  String?
+  approvedBy        User?                     @relation("RecommendationApprover", fields: [approvedByUserId], references: [id])
+  decidedAt         DateTime?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  @@index([agentRunId])
+  @@index([status])
+  @@index([ownerRole])
+}
+
+model AgentEvaluation {
+  id             String    @id @default(cuid())
+  agentType      AgentType
+  version        String
+  fixtureName    String
+  passed         Boolean
+  score          Float
+  expectedOutput Json
+  actualOutput   Json
+  createdAt      DateTime  @default(now())
+
+  @@index([agentType, version])
+  @@index([passed])
+}
+
+model WorkerLock {
+  id        String        @id @default(cuid())
+  jobId     String        @unique
+  job       BackgroundJob @relation(fields: [jobId], references: [id])
+  lockedBy  String
+  lockedAt  DateTime      @default(now())
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  actor       User?    @relation(fields: [actorUserId], references: [id])
+  action      String
+  entityType  String
+  entityId    String
+  before      Json?
+  after       Json?
+  metadata    Json
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+}

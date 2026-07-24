@@ -1,0 +1,73 @@
+import { Card, CardHeader, DataTable, Field, PageHeader, Stat } from "@agentic-edu/ui";
+import { prisma } from "@agentic-edu/db";
+import { getAcademicOperationsOverview } from "@agentic-edu/application";
+import { decideInterventionApproval, requestInterventionApproval } from "@/lib/actions";
+import { formatDateTime } from "@/lib/format";
+import { StatusBadge } from "@/components/status-badge";
+
+export default async function ApprovalsPage() {
+  const [overview, plans] = await Promise.all([
+    getAcademicOperationsOverview(),
+    prisma.interventionPlan.findMany({ include: { student: true }, orderBy: { createdAt: "desc" } })
+  ]);
+
+  return (
+    <>
+      <PageHeader title="Intervention Approvals" description="Human approval workflow for support plans and agent-suggested interventions." />
+      <div className="ui-stat-grid">
+        <Stat label="Pending" value={overview.metrics.pendingApprovals} tone={overview.metrics.pendingApprovals > 0 ? "warn" : "good"} />
+        <Stat label="Approved" value={overview.approvals.filter((approval) => approval.status === "Approved").length} tone="good" />
+        <Stat label="Rejected" value={overview.approvals.filter((approval) => approval.status === "Rejected").length} tone="danger" />
+      </div>
+
+      <Card>
+        <CardHeader title="Request Approval" />
+        <form action={requestInterventionApproval} className="ui-form-grid">
+          <Field label="Intervention plan">
+            <select name="interventionPlanId">
+              {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.student.firstName} {plan.student.lastName}: {plan.summary}</option>)}
+            </select>
+          </Field>
+          <button className="ui-button ui-button--primary" type="submit">Request approval</button>
+        </form>
+      </Card>
+
+      <Card>
+        <CardHeader title="Approval Queue" />
+        <DataTable>
+          <thead><tr><th>Student</th><th>Plan</th><th>Status</th><th>Requested by</th><th>Reviewed by</th><th>Created</th><th>Decision</th></tr></thead>
+          <tbody>
+            {overview.approvals.map((approval) => (
+              <tr key={approval.id}>
+                <td>{approval.interventionPlan.student.firstName} {approval.interventionPlan.student.lastName}</td>
+                <td>{approval.interventionPlan.summary}</td>
+                <td><StatusBadge value={approval.status} /></td>
+                <td>{approval.requestedBy.name}</td>
+                <td>{approval.reviewedBy?.name ?? "Pending"}</td>
+                <td>{formatDateTime(approval.createdAt)}</td>
+                <td>
+                  {approval.status === "Requested" ? (
+                    <div className="ui-actions">
+                      <form action={decideInterventionApproval}>
+                        <input type="hidden" name="id" value={approval.id} />
+                        <input type="hidden" name="status" value="Approved" />
+                        <input type="hidden" name="rationale" value="Reviewed from approvals page." />
+                        <button className="ui-button ui-button--secondary" type="submit">Approve</button>
+                      </form>
+                      <form action={decideInterventionApproval}>
+                        <input type="hidden" name="id" value={approval.id} />
+                        <input type="hidden" name="status" value="Rejected" />
+                        <input type="hidden" name="rationale" value="Rejected from approvals page." />
+                        <button className="ui-button ui-button--danger" type="submit">Reject</button>
+                      </form>
+                    </div>
+                  ) : approval.rationale ?? "Decided"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
+      </Card>
+    </>
+  );
+}
