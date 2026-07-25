@@ -7,8 +7,12 @@ import { StatusBadge } from "@/components/status-badge";
 import { formatDate, percent } from "@/lib/format";
 import { createSubmission, publishAssignment, runGradingConsistencyAgent, updateAssignment } from "@/lib/actions";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { guardStaffRecord } from "@/components/route-guard";
 
 export default async function AssignmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const denied = await guardStaffRecord();
+  if (denied) return denied;
+
   const { id } = await params;
   const assignment = await prisma.assignment.findUnique({
     where: { id },

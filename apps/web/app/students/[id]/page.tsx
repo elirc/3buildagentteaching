@@ -12,8 +12,12 @@ import {
   updateStudent
 } from "@/lib/actions";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { guardStaffRecord } from "@/components/route-guard";
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const denied = await guardStaffRecord();
+  if (denied) return denied;
+
   const { id } = await params;
   const profile = await getStudentProfile(id);
   if (!profile) notFound();

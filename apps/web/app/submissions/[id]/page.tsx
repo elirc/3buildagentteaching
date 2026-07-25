@@ -8,8 +8,12 @@ import { ActionForm, SubmitButton } from "@/components/action-form";
 import { getActorCapabilities } from "@/lib/capabilities";
 import { formatDateTime, percent } from "@/lib/format";
 import { gradeSubmission, gradeSubmissionWithRubric, runAssignmentFeedbackAgent } from "@/lib/actions";
+import { guardStaffRecord } from "@/components/route-guard";
 
 export default async function SubmissionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const denied = await guardStaffRecord();
+  if (denied) return denied;
+
   const { id } = await params;
   const { can } = await getActorCapabilities();
 
