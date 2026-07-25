@@ -12,6 +12,7 @@ import {
   determineSubmissionStatus,
   guardianRelationshipSchema,
   interventionStatusSchema,
+  rankGradingQueue,
   recommendationDecisionSchema,
   nextNotificationStatusAfterRead,
   retryJob,
@@ -140,6 +141,50 @@ describe("risk and workload scoring", () => {
     expect(risk.level).toBe("Critical");
     expect(risk.primaryAreas).toContain("Grades");
     expect(risk.primaryAreas).toContain("Attendance");
+  });
+
+  it("puts a Critical student's newer work above a Low-risk student's older work", () => {
+    // The reason rankGradingQueue exists. Sorting by age alone buries the
+    // submission that matters most under one that matters least.
+    const ranked = rankGradingQueue([
+      { submissionId: "sub_low_old", studentId: "s1", daysWaiting: 9, riskLevel: "Low" },
+      { submissionId: "sub_critical_new", studentId: "s2", daysWaiting: 5, riskLevel: "Critical" }
+    ]);
+
+    expect(ranked.map((item) => item.submissionId)).toEqual(["sub_critical_new", "sub_low_old"]);
+  });
+
+  it("still lets age win once the gap is large enough", () => {
+    // Risk weighting must not become an absolute override, or genuinely stale
+    // work never gets graded.
+    const ranked = rankGradingQueue([
+      { submissionId: "sub_low_ancient", studentId: "s1", daysWaiting: 30, riskLevel: "Low" },
+      { submissionId: "sub_high_new", studentId: "s2", daysWaiting: 1, riskLevel: "High" }
+    ]);
+
+    expect(ranked[0]?.submissionId).toBe("sub_low_ancient");
+  });
+
+  it("orders identical items deterministically", () => {
+    // Without a total order the table reshuffles between renders, which reads
+    // as a bug even though every row is present.
+    const items = [
+      { submissionId: "sub_b", studentId: "s1", daysWaiting: 3, riskLevel: "Medium" as const },
+      { submissionId: "sub_a", studentId: "s2", daysWaiting: 3, riskLevel: "Medium" as const }
+    ];
+
+    expect(rankGradingQueue(items).map((i) => i.submissionId)).toEqual(["sub_a", "sub_b"]);
+    expect(rankGradingQueue([...items].reverse()).map((i) => i.submissionId)).toEqual(["sub_a", "sub_b"]);
+  });
+
+  it("clamps a negative wait to zero", () => {
+    // A due date in the future produces a negative age. Treat it as brand new
+    // rather than letting it sort below everything.
+    const [item] = rankGradingQueue([
+      { submissionId: "sub_future", studentId: "s1", daysWaiting: -4, riskLevel: "High" }
+    ]);
+    expect(item?.daysWaiting).toBe(0);
+    expect(item?.urgency).toBe(7);
   });
 
   it("scores a large grading backlog as heavy workload", () => {
