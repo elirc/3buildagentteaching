@@ -150,6 +150,13 @@ the reported leak would have meant editing correct code to satisfy a broken test
 **A guard that refuses everyone is an outage, not a guard.** Every access check
 needs a positive test alongside the negative ones.
 
+**`gh run view --jq .conclusion` does not gate anything.** It exits 0 whenever
+it can fetch the run, so `gh run view ... && gh pr merge ...` merges happily
+while printing the word `failure`. PR #20 went in on a red job this way. Use
+`gh run watch --exit-status`, whose exit code carries the answer. (That
+particular failure was a Docker Hub timeout and the commits passed on re-run —
+but the chain would have merged a real breakage identically.)
+
 **Re-check at write time, not render time.** A roster page that says "1 seat
 open" is stating something that was true when it rendered. Anything the UI
 computed in order to *offer* an action must be recomputed by the code that
