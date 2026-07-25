@@ -122,3 +122,120 @@ export function titleCase(value: string): string {
     .replace(/[-_]/g, " ")
     .replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
 }
+
+/* ------------------------------------------------------------------ *
+ * List paging
+ *
+ * Pure helpers for URL-driven list pages. They live in `shared` rather
+ * than `domain` because paging is a presentation concern, not a business
+ * rule — nothing here encodes anything about schools.
+ * ------------------------------------------------------------------ */
+
+export const DEFAULT_PAGE_SIZE = 25;
+export const MAX_PAGE_SIZE = 100;
+
+export interface ListParams {
+  q: string | null;
+  page: number;
+  pageSize: number;
+}
+
+export interface Pagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  skip: number;
+  take: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  /** 1-based index of the first row on this page; 0 when there are no rows. */
+  firstRow: number;
+  /** 1-based index of the last row on this page; 0 when there are no rows. */
+  lastRow: number;
+}
+
+/**
+ * Normalises whatever arrived in the query string.
+ *
+ * Query strings are user input. `?page=-1`, `?page=abc`, `?pageSize=100000`
+ * and a hand-edited URL all reach this function, and every one of them has to
+ * produce a sane query rather than an exception or a full-table scan. Clamping
+ * beats validating here: nobody wants an error page because they fat-fingered a
+ * page number.
+ */
+export function parseListParams(
+  input: { q?: string; page?: string; pageSize?: string } = {}
+): ListParams {
+  const q = typeof input.q === "string" && input.q.trim().length > 0 ? input.q.trim() : null;
+
+  const parsedPage = Number.parseInt(input.page ?? "", 10);
+  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+
+  const parsedSize = Number.parseInt(input.pageSize ?? "", 10);
+  const pageSize =
+    Number.isFinite(parsedSize) && parsedSize > 0 ? Math.min(parsedSize, MAX_PAGE_SIZE) : DEFAULT_PAGE_SIZE;
+
+  return { q, page, pageSize };
+}
+
+/**
+ * Turns a total row count into everything a list page needs to render.
+ *
+ * `page` is clamped to the last populated page. Without that, deleting the only
+ * row on page 4 leaves the user looking at an empty table with no way back —
+ * a real and easily-missed bug, because it only appears after a delete.
+ */
+export function buildPagination(total: number, params: ListParams): Pagination {
+  const safeTotal = Math.max(0, Math.floor(total));
+  const totalPages = Math.max(1, Math.ceil(safeTotal / params.pageSize));
+  const page = Math.min(Math.max(1, params.page), totalPages);
+  const skip = (page - 1) * params.pageSize;
+  const rowsOnPage = Math.max(0, Math.min(params.pageSize, safeTotal - skip));
+
+  return {
+    page,
+    pageSize: params.pageSize,
+    total: safeTotal,
+    totalPages,
+    skip,
+    take: params.pageSize,
+    hasPrevious: page > 1,
+    hasNext: page < totalPages,
+    firstRow: rowsOnPage === 0 ? 0 : skip + 1,
+    lastRow: rowsOnPage === 0 ? 0 : skip + rowsOnPage
+  };
+}
+
+/**
+ * Builds a query string that preserves every existing filter and changes one key.
+ *
+ * Paging links must not silently drop the filters the user set. Doing this by
+ * hand at each call site is how "next page" ends up resetting the search box.
+ */
+export function withParam(
+  current: Record<string, string | undefined>,
+  key: string,
+  value: string | number | null
+): string {
+  const next = new URLSearchParams();
+  for (const [k, v] of Object.entries(current)) {
+    if (v !== undefined && v !== "" && k !== key) next.set(k, v);
+  }
+  if (value !== null && value !== "") next.set(key, String(value));
+  const qs = next.toString();
+  return qs.length > 0 ? `?${qs}` : "";
+}
+
+/**
+ * Narrows a query-string value to a known enum member, or null.
+ *
+ * This exists to kill `params.status as never`, which was being handed straight
+ * to a Prisma `where` clause. The cast silenced the compiler and checked
+ * nothing, so `?status=DROP` reached the driver. Unlike a form field, a bad
+ * filter should not be an error — it should simply not filter.
+ */
+export function parseEnumParam<T extends string>(value: string | undefined, allowed: readonly T[]): T | undefined {
+  if (!value) return undefined;
+  return (allowed as readonly string[]).includes(value) ? (value as T) : undefined;
+}
