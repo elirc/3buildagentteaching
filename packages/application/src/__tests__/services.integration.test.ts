@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@agentic-edu/db";
+import { academicService } from "../services/academic-service";
 import { assignmentService } from "../services/assignment-service";
 import { enrollmentService } from "../services/enrollment-service";
 import { workerService } from "../services/worker-service";
@@ -440,5 +441,121 @@ describe("assignmentService.submitAssignment", () => {
     const rows = await prisma.submission.findMany({ where: { assignmentId: assignment.id } });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.contentText).toBe("second draft");
+  });
+});
+
+describe("enrollmentService.promoteFromWaitlist", () => {
+  async function seatedSection(capacity: number) {
+    const teacher = await makeTeacher();
+    const section = await makeSection(teacher.id, { capacity });
+    return section;
+  }
+
+  it("moves a waitlisted student into a freed seat", async () => {
+    const section = await seatedSection(1);
+    const seated = await makeStudent();
+    const waiting = await makeStudent();
+
+    await enrollmentService.enrollStudent(ADMIN, { studentId: seated.id, classSectionId: section.id, allowWaitlist: true });
+    const wl = await enrollmentService.enrollStudent(ADMIN, {
+      studentId: waiting.id,
+      classSectionId: section.id,
+      allowWaitlist: true
+    });
+    expect(wl.status).toBe("Waitlisted");
+
+    // Free the seat, then promote.
+    const seatedEnrollment = await prisma.enrollment.findFirstOrThrow({
+      where: { studentId: seated.id, classSectionId: section.id }
+    });
+    await enrollmentService.dropEnrollment(ADMIN, seatedEnrollment.id);
+
+    const promoted = await enrollmentService.promoteFromWaitlist(ADMIN, wl.id);
+    expect(promoted.status).toBe("Enrolled");
+
+    const audits = await prisma.auditEvent.findMany({ where: { action: "enrollment.promoted" } });
+    expect(audits).toHaveLength(1);
+  });
+
+  it("refuses promotion into a section that is still full", async () => {
+    // The roster said "1 seat open" when it rendered; someone else took it.
+    // The decision has to be made at write time, not render time.
+    const section = await seatedSection(1);
+    await enrollmentService.enrollStudent(ADMIN, {
+      studentId: (await makeStudent()).id,
+      classSectionId: section.id,
+      allowWaitlist: true
+    });
+    const wl = await enrollmentService.enrollStudent(ADMIN, {
+      studentId: (await makeStudent()).id,
+      classSectionId: section.id,
+      allowWaitlist: true
+    });
+
+    await expect(enrollmentService.promoteFromWaitlist(ADMIN, wl.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await prisma.enrollment.count({ where: { status: "Enrolled" } })).toBe(1);
+  });
+
+  it("refuses to promote an enrollment that is not waitlisted", async () => {
+    const section = await seatedSection(5);
+    const enrolled = await enrollmentService.enrollStudent(ADMIN, {
+      studentId: (await makeStudent()).id,
+      classSectionId: section.id,
+      allowWaitlist: false
+    });
+
+    await expect(enrollmentService.promoteFromWaitlist(ADMIN, enrolled.id)).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+});
+
+describe("enrollmentService.bulkEnroll", () => {
+  it("enrols the eligible and reports the rest, rather than failing the batch", async () => {
+    // One bad row must not cost the operator eleven good ones. If it did, they
+    // would re-select names to work around it and stop using the form.
+    const teacher = await makeTeacher();
+    const section = await makeSection(teacher.id, { capacity: 5 });
+    const ok1 = await makeStudent();
+    const ok2 = await makeStudent();
+    const withdrawn = await makeStudent({ enrollmentStatus: "Withdrawn" });
+
+    const results = await enrollmentService.bulkEnroll(ADMIN, {
+      classSectionId: section.id,
+      studentIds: [ok1.id, withdrawn.id, ok2.id],
+      allowWaitlist: false
+    });
+
+    expect(results.filter((r) => r.ok)).toHaveLength(2);
+    expect(results.find((r) => r.studentId === withdrawn.id)?.ok).toBe(false);
+    expect(await prisma.enrollment.count({ where: { status: "Enrolled" } })).toBe(2);
+  });
+});
+
+describe("academicService.updateSection capacity guard", () => {
+  it("refuses a capacity below the students already seated", async () => {
+    const teacher = await makeTeacher();
+    const section = await makeSection(teacher.id, { capacity: 3 });
+    for (let i = 0; i < 2; i += 1) {
+      await enrollmentService.enrollStudent(ADMIN, {
+        studentId: (await makeStudent()).id,
+        classSectionId: section.id,
+        allowWaitlist: false
+      });
+    }
+
+    await expect(
+      academicService.updateSection(ADMIN, section.id, {
+        courseId: section.courseId,
+        teacherId: teacher.id,
+        academicTermId: null,
+        term: section.term,
+        room: section.room,
+        schedule: { days: ["Mon"], start: "09:00", end: "09:55" },
+        capacity: 1,
+        status: "Active"
+      })
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+
+    // The refused edit must leave capacity untouched.
+    expect((await prisma.classSection.findUniqueOrThrow({ where: { id: section.id } })).capacity).toBe(3);
   });
 });

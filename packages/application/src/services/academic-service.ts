@@ -2,6 +2,7 @@ import { Prisma, prisma } from "@agentic-edu/db";
 import type { ClassSectionInput, CourseInput } from "@agentic-edu/domain";
 import { AppError } from "../errors";
 import { assertCan, type ActorContext } from "../context";
+import { canReduceCapacity } from "@agentic-edu/domain";
 import { createAuditEvent } from "../audit";
 
 export const academicService = {
@@ -62,7 +63,24 @@ export const academicService = {
   async updateSection(actor: ActorContext, id: string, input: ClassSectionInput) {
     assertCan(actor, "section:update", { teacherId: input.teacherId });
     return prisma.$transaction(async (tx) => {
-      const before = await tx.classSection.findUniqueOrThrow({ where: { id } });
+      const before = await tx.classSection.findUniqueOrThrow({
+        where: { id },
+        include: { enrollments: { where: { status: "Enrolled" } } }
+      });
+
+      // Lowering capacity below the seated count leaves the section permanently
+      // over-subscribed: every later enrollment check refuses and nothing says
+      // why. Refuse the edit and name the number instead.
+      const capacityDecision = canReduceCapacity({
+        newCapacity: input.capacity,
+        activeEnrollmentCount: before.enrollments.length
+      });
+      if (!capacityDecision.allowed) {
+        throw new AppError("VALIDATION_ERROR", capacityDecision.reason ?? "Capacity is invalid.", {
+          classSectionId: id
+        });
+      }
+
       const section = await tx.classSection.update({
         where: { id },
         data: { ...input, schedule: input.schedule as Prisma.InputJsonValue }
