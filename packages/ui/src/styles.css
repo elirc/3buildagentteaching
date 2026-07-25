@@ -322,3 +322,28 @@ button {
     justify-content: flex-start;
   }
 }
+
+/* Paging footer. Disabled controls are <span>, not <a>, so they are not
+   focusable and cannot be activated — an anchor with no href is skipped by
+   keyboard navigation anyway, but a styled span makes the intent explicit. */
+.ui-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-3);
+}
+
+.ui-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ui-button.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
