@@ -1,6 +1,12 @@
 import { prisma } from "@agentic-edu/db";
 import type { AssignmentInput } from "@agentic-edu/domain";
-import { calculateRubricScore, rubricRequiresTeacherReview, validateScore } from "@agentic-edu/domain";
+import {
+  calculateRubricScore,
+  canSubmitAssignment,
+  determineSubmissionStatus,
+  rubricRequiresTeacherReview,
+  validateScore
+} from "@agentic-edu/domain";
 import { AppError } from "../errors";
 import { assertCan, type ActorContext } from "../context";
 import { createAuditEvent } from "../audit";
@@ -81,13 +87,46 @@ export const assignmentService = {
       studentId: string;
       contentText: string;
       attachmentUrl: string | null;
+      /** Injected so the late/on-time boundary is testable. */
+      now?: Date;
     }
   ) {
     assertCan(actor, "submission:create", { studentId: input.studentId });
     return prisma.$transaction(async (tx) => {
       const assignment = await tx.assignment.findUniqueOrThrow({ where: { id: input.assignmentId } });
-      const submittedAt = new Date();
-      const status = submittedAt > assignment.dueDate ? "Late" : "Submitted";
+      const submittedAt = input.now ?? new Date();
+
+      /*
+       * canSubmitAssignment has existed and been unit-tested since the first
+       * commit and was called by nothing. Without it, a student could submit to
+       * a Draft assignment they were never meant to see, or to a Closed one
+       * after the teacher had finished grading — both just worked.
+       */
+      const decision = canSubmitAssignment({
+        assignmentStatus: assignment.status,
+        dueDate: assignment.dueDate,
+        submittedAt,
+        now: submittedAt
+      });
+      if (!decision.allowed) {
+        throw new AppError("CONFLICT", decision.reason ?? "This assignment is not open for submission.", {
+          assignmentId: input.assignmentId
+        });
+      }
+
+      /*
+       * determineSubmissionStatus rather than an inline date comparison. Same
+       * answer today, but the rule now lives in one tested place instead of
+       * being duplicated between here and the domain function that was written
+       * for it.
+       */
+      const status = determineSubmissionStatus({
+        assignmentStatus: assignment.status,
+        dueDate: assignment.dueDate,
+        submittedAt,
+        now: submittedAt
+      });
+
       const submission = await tx.submission.upsert({
         where: {
           assignmentId_studentId: {

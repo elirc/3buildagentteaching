@@ -34,7 +34,7 @@ const BOOT_TIMEOUT_MS = Number(process.env.SMOKE_BOOT_TIMEOUT_MS ?? 900_000);
 const REQUEST_TIMEOUT_MS = Number(process.env.SMOKE_REQUEST_TIMEOUT_MS ?? 120_000);
 
 const ROUTES = [
-  "/", "/my-work", "/family", "/teachers", "/students", "/courses", "/sections", "/terms", "/enrollments",
+  "/", "/my-work", "/family", "/my-courses", "/teachers", "/students", "/courses", "/sections", "/terms", "/enrollments",
   "/assignments", "/rubrics", "/gradebook", "/attendance", "/at-risk", "/interventions",
   "/approvals", "/guardians", "/notifications", "/jobs", "/worker-jobs", "/logs",
   "/agent-runs", "/agent-ops", "/agent-recommendations", "/audit-events", "/settings"
@@ -134,6 +134,25 @@ const DATA_CHECKS = [
       /requested weekly progress digest/i.test(html)
         ? "AdvisorOnly support note leaked to a guardian"
         : null
+  },
+  {
+    // Maya is enrolled in Algebra, Biology and English. Her portal must show
+    // those and must not show the Geometry course she is not enrolled in.
+    url: "/my-courses",
+    as: "user_student_maya",
+    expect: (html) => {
+      const content = withoutSwitcher(html);
+      if (!/Algebra I/.test(content)) return "student should see their enrolled courses";
+      if (/Geometry/.test(content)) return "student must not see courses they are not enrolled in";
+      return null;
+    }
+  },
+  {
+    // The class average must never appear on a student's own view.
+    url: "/my-courses",
+    as: "user_student_maya",
+    expect: (html) =>
+      /class average/i.test(withoutSwitcher(html)) ? "class average leaked to a student" : null
   },
   {
     // A Viewer is refused the operational pages by guardRoute.
