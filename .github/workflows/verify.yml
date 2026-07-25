@@ -1,0 +1,112 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to the same branch makes the previous run irrelevant. Without this,
+# a busy branch queues runs that are already stale before they start.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Every job talks to a Postgres service container on the standard port. There
+  # is no port juggling here because each runner is its own machine — that
+  # problem only exists on a developer laptop hosting several projects.
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentic_education_ops_test?schema=public
+
+jobs:
+  unit:
+    name: typecheck + lint + unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Prisma Client is generated code and is not committed, so nothing
+      # typechecks until this runs.
+      - run: npm run db:generate
+      - run: npm run typecheck
+      # Lint lives here rather than in the local `verify` gate: it measured
+      # 12m45s on the reference dev machine, which is long enough that people
+      # stop running it. A slow job on CI costs nobody's attention.
+      - run: npm run lint
+      - run: npm test
+
+  integration:
+    name: integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agentic_education_ops_test
+        ports:
+          - 5432:5432
+        # Without a health check the steps below start before Postgres finishes
+        # initdb and fail with a connection error that looks like a config bug.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      # The suite reads .env.test rather than the environment, so it has to
+      # exist. The database name must end in _test — global-setup.ts refuses to
+      # run otherwise, which is what stops this ever pointing at real data.
+      - name: Write .env.test
+        run: echo 'DATABASE_URL="${{ env.DATABASE_URL }}"' > .env.test
+      - run: npm run test:integration
+
+  smoke:
+    name: smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agentic_education_ops
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentic_education_ops?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run db:push
+      # The data assertions in scripts/smoke.mjs check for the seeded students
+      # by id, so the seed is a hard prerequisite rather than a convenience.
+      - run: npm run db:seed
+      - name: Write apps/web/.env.local
+        run: echo 'DATABASE_URL="${{ env.DATABASE_URL }}"' > apps/web/.env.local
+      # This is the job that would have caught "every route returns 500 while
+      # every unit test passes". It is the whole reason US-04 exists.
+      - run: npm run smoke
+        env:
+          SMOKE_BOOT_TIMEOUT_MS: 300000

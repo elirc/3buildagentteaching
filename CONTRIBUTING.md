@@ -188,11 +188,32 @@ file reads `${POSTGRES_PORT:-5432}` for exactly this reason.
 
 ```bash
 npm run verify            # typecheck + unit tests. Run this before every push.
-npm run verify:full       # adds lint. This is what CI runs.
-npm run test:integration  # services against a real Postgres (needs the test DB up)
-npm run test:e2e          # Playwright smoke over the seeded app
-npm run agents:eval       # golden-fixture regression check for the agents
+npm run verify:full       # adds lint.
+
+npm run test:db:up        # throwaway Postgres on :5443 for the integration suite
+npm run test:integration  # services against a real database
+npm run test:db:down      # tear it down
+
+npm run smoke             # boots the app and checks every route + key data
 ```
+
+**What each gate actually proves**, because they are not interchangeable:
+
+| Gate | Answers |
+| --- | --- |
+| `typecheck` | do the types line up |
+| `test` (unit) | are the pure functions correct |
+| `test:integration` | do constraints, transactions and rollbacks behave |
+| `smoke` | **does the application actually serve a page** |
+| `build` | is the server/client boundary legal |
+
+That last distinction is not academic. During US-03 every route returned 500
+while typecheck and 53 unit tests were green — see `fabledocs/03-progress.md`.
+A passing unit suite says nothing about whether the app starts.
+
+The integration suite requires `.env.test` (copy `.env.test.example`). Its
+database name **must** end in `_test`; the harness refuses to run otherwise,
+because it truncates every table between test files.
 
 **Why `lint` is not in `verify`.** `eslint.config.mjs` extends
 `next/typescript`, which turns on type-aware rules. Those rules re-typecheck the
