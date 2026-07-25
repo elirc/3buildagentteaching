@@ -20,6 +20,7 @@ import {
   recommendationDecisionSchema,
   nextNotificationStatusAfterRead,
   retryJob,
+  routeNotificationRecipients,
   rubricRequiresTeacherReview,
   canPerform,
   scoreStudentRisk,
@@ -474,6 +475,48 @@ describe("validation", () => {
 
     expect(approvalDecisionSchema.parse("Approved")).toBe("Approved");
     expect(recommendationDecisionSchema.parse("Completed")).toBe("Completed");
+  });
+});
+
+describe("notification routing", () => {
+  const staff = [
+    { userId: "u_admin", role: "Admin" as const },
+    { userId: "u_manager", role: "SchoolManager" as const },
+    { userId: "u_teacher", role: "Teacher" as const },
+    { userId: "u_advisor", role: "Advisor" as const }
+  ];
+
+  it("sends job failures only to people who can act on them", () => {
+    // A teacher can do nothing about a dead-lettered job. Telling them anyway
+    // trains the people who CAN act to stop reading.
+    expect(routeNotificationRecipients("JobFailure", staff)).toEqual(["u_admin", "u_manager"]);
+  });
+
+  it("follows the agent's nominated owner for recommendations", () => {
+    expect(routeNotificationRecipients("AgentRecommendation", staff, { ownerRole: "Teacher" })).toEqual(["u_teacher"]);
+    expect(routeNotificationRecipients("AgentRecommendation", staff, { ownerRole: "Admin" })).toEqual(["u_admin"]);
+  });
+
+  it("falls back to support staff when the owner role is missing or nonsense", () => {
+    // A recommendation nobody receives is worse than one a few extra people see.
+    expect(routeNotificationRecipients("AgentRecommendation", staff, { ownerRole: null })).toEqual([
+      "u_admin",
+      "u_manager",
+      "u_advisor"
+    ]);
+    expect(routeNotificationRecipients("AgentRecommendation", staff, { ownerRole: "Wizard" })).toEqual([
+      "u_admin",
+      "u_manager",
+      "u_advisor"
+    ]);
+  });
+
+  it("passes through recipients for student-facing types", () => {
+    const family = [
+      { userId: "u_student", role: "Student" as const },
+      { userId: "u_guardian", role: "Guardian" as const }
+    ];
+    expect(routeNotificationRecipients("GradePosted", family)).toEqual(["u_student", "u_guardian"]);
   });
 });
 
