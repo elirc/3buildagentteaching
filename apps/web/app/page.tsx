@@ -4,7 +4,8 @@ import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime, percent } from "@/lib/format";
 
 export default async function DashboardPage() {
-  const { agentRuns, auditEvents, classAverage, metrics, studentRisk, workloadAlerts } = await getDashboardSummary();
+  const { agentRuns, auditEvents, classAverage, metrics, riskBoardTruncated, studentRisk, workloadAlerts } =
+    await getDashboardSummary();
 
   return (
     <>
@@ -55,7 +56,11 @@ export default async function DashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Grade Distribution Summary" />
+          <CardHeader title="Grade Distribution Summary">
+            {riskBoardTruncated
+              ? "Across the 50 students loaded for the risk board, not the whole school."
+              : "Across all active students."}
+          </CardHeader>
           <div className="metric-row">
             <Stat label="Overall average" value={percent(classAverage)} tone="info" />
             <Stat label="Excellent" value={studentRisk.filter((item) => item.gradeSummary.performanceBand === "Excellent").length} tone="good" />

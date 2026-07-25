@@ -131,3 +131,105 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
     </div>
   );
 }
+
+/**
+ * Paging footer for a list page.
+ *
+ * Plain links, not buttons. That means the browser's back button works, a page
+ * is bookmarkable, and the whole thing keeps functioning with JavaScript
+ * disabled — which matters here because every page in this app is a Server
+ * Component and paging is the one interaction that does not need a client
+ * bundle at all.
+ *
+ * `hrefFor` is supplied by the caller rather than being built in, because only
+ * the caller knows which other query params must survive the click.
+ */
+export function Pagination({
+  page,
+  totalPages,
+  total,
+  firstRow,
+  lastRow,
+  hasPrevious,
+  hasNext,
+  hrefFor,
+  label = "results"
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  firstRow: number;
+  lastRow: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  hrefFor: (page: number) => string;
+  label?: string;
+}) {
+  if (total === 0) return null;
+
+  return (
+    <nav className="ui-pagination" aria-label="Pagination">
+      <span className="muted">
+        Showing {firstRow}–{lastRow} of {total} {label}
+      </span>
+      <span className="ui-pagination-controls">
+        {hasPrevious ? (
+          <a className="ui-button ui-button--ghost" href={hrefFor(page - 1)} rel="prev">
+            ‹ Previous
+          </a>
+        ) : (
+          <span className="ui-button ui-button--ghost is-disabled" aria-disabled="true">
+            ‹ Previous
+          </span>
+        )}
+        <span className="muted">
+          Page {page} of {totalPages}
+        </span>
+        {hasNext ? (
+          <a className="ui-button ui-button--ghost" href={hrefFor(page + 1)} rel="next">
+            Next ›
+          </a>
+        ) : (
+          <span className="ui-button ui-button--ghost is-disabled" aria-disabled="true">
+            Next ›
+          </span>
+        )}
+      </span>
+    </nav>
+  );
+}
+
+/**
+ * A GET form wrapping filter controls.
+ *
+ * `method="get"` is the entire trick: the browser serialises the fields into
+ * the query string for us, so filter state lives in the URL with no client
+ * JavaScript and no state management. Shareable, bookmarkable, back-button
+ * friendly.
+ *
+ * The hidden `page` reset is the non-obvious part — see the comment below.
+ */
+export function FilterBar({ children, resetHref }: { children: ReactNode; resetHref?: string }) {
+  return (
+    <form className="form-grid" method="get">
+      {/*
+        Applying a new filter must return to page 1. Without this, a user on
+        page 6 who narrows the search to 3 results lands on page 6 of 1 and sees
+        an empty table. buildPagination would clamp it, but resetting here is
+        clearer than relying on a downstream rescue.
+      */}
+      <input type="hidden" name="page" value="1" />
+      {children}
+      <div className="form-actions">
+        <button className="ui-button ui-button--secondary" type="submit">
+          Apply
+        </button>
+        {resetHref ? (
+          <a className="ui-button ui-button--ghost" href={resetHref}>
+            Reset
+          </a>
+        ) : null}
+      </div>
+    </form>
+  );
+}
