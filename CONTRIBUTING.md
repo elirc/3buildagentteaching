@@ -147,6 +147,30 @@ CI must be green before merge. There is no exception for "it's just a docs
 change" — if CI is red, either the change is broken or CI is, and both are worth
 finding out about.
 
+**Gate the merge on the exit code, not on printed text.** This is not
+hypothetical: PR #20 was merged while its `integration` job was red, because the
+command chain checked CI like this —
+
+```bash
+gh run view "$RUN" --jq .conclusion && gh pr merge ...   # WRONG
+```
+
+`gh run view` exits 0 whenever it successfully *fetches* the run. It printed the
+word `failure` and the `&&` sailed straight past it into the merge. Use a
+command whose exit status carries the answer:
+
+```bash
+gh run watch "$RUN" --exit-status && gh pr merge ...     # right
+```
+
+That failure turned out to be a Docker Hub timeout pulling the Postgres image,
+and the same commits passed on re-run — but the process was wrong regardless,
+and it would have merged a genuine breakage just as happily.
+
+**Transient CI failures are normal.** Registry timeouts, runner hiccups, network
+blips. Re-run the job. What is not acceptable is merging without looking,
+because "it was probably flaky" and "it was flaky" are different claims.
+
 ---
 
 ## 4. Definition of done
