@@ -34,6 +34,7 @@ describe("navigation", () => {
       expect(hrefs).not.toContain("/gradebook");
       expect(hrefs).not.toContain("/at-risk");
       expect(hrefs).not.toContain("/audit-events");
+      expect(hrefs).not.toContain("/my-work");
       // They can still see the dashboard, their notifications, and settings.
       expect(hrefs).toContain("/notifications");
     }
@@ -41,6 +42,7 @@ describe("navigation", () => {
 
   it("a Teacher can reach instruction pages but not the audit log", () => {
     const hrefs = navItemsForRole("Teacher").map((item) => item.href);
+    expect(hrefs).toContain("/my-work");
     expect(hrefs).toContain("/gradebook");
     expect(hrefs).toContain("/rubrics");
     expect(hrefs).toContain("/agent-recommendations");
