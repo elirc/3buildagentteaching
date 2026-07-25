@@ -43,8 +43,8 @@ starting, because three of these have already shipped and two left partials.
 | US-02 | Role-aware navigation and action gating | M | US-01 | ✅ shipped (#3), partials |
 | US-03 | Search, filtering, and pagination on list pages | M | — | ✅ shipped (#4), partials |
 | US-04 | Test and CI foundation | L | — | ✅ shipped (#6), smoke not Playwright |
-| US-05 | Teacher workbench: the grading queue | M | US-02 |
-| US-06 | Rubric-based grading with criterion scores | L | US-05 |
+| US-05 | Teacher workbench: the grading queue | M | US-02 | ✅ shipped (#8) |
+| US-06 | Rubric-based grading with criterion scores | L | US-05 | ✅ shipped (#9), 2 criteria deferred |
 | US-07 | Section-roster attendance entry | M | US-02 |
 | US-08 | Guardian portal | M | US-02 |
 | US-09 | Student portal: submit work and track grades | M | US-02 |

@@ -12,13 +12,15 @@ actually stands. Updated when a story merges.
 | US-02 | [#3](https://github.com/elirc/3buildagentteaching/pull/3) | Sidebar filtered by role; 9 operational routes guarded; job controls gated; acting role shown in the top bar |
 | US-03 | [#4](https://github.com/elirc/3buildagentteaching/pull/4) | `/students` + `/teachers` paginated with search; dashboard metrics moved to aggregates; 5 more `as never` casts removed |
 | US-04 | [#6](https://github.com/elirc/3buildagentteaching/pull/6) | 10 integration tests on a real Postgres, a route+data smoke test, and a 3-job GitHub Actions pipeline |
+| US-05 | [#8](https://github.com/elirc/3buildagentteaching/pull/8) | `/my-work` grading queue ordered by urgency (wait time weighted by student risk), plus a needs-attention panel |
+| US-06 | [#9](https://github.com/elirc/3buildagentteaching/pull/9) | Criterion-by-criterion rubric grading with derived totals and partial saves; late-unscored grade-average fix |
 
-**Test count: 28 → 63** (53 unit + 10 integration), plus a smoke pass over 24
-routes and 5 data assertions. CI green on all three jobs.
+**Test count: 28 → 75** (60 unit + 15 integration), plus a smoke pass over 25
+routes and 5 data assertions. CI green on all three jobs for every merge.
 
 ## Not started
 
-US-05 through US-20, exactly as written in `02-user-stories.md`. Nothing in
+US-07 through US-20, exactly as written in `02-user-stories.md`. Nothing in
 those stories has been superseded — the file is still the spec.
 
 ## How to verify your work now
@@ -55,6 +57,15 @@ up, it is a small piece of work, not a rewrite.
   twenty minutes.
 - **`/jobs` and `/logs`** still contain `params.x as never` in their filter
   clauses. `parseEnumParam` exists now — these are two-line fixes.
+- **US-06 criteria 6 and 7** — `runAssignmentFeedbackAgent` still passes the
+  hardcoded `rubricFields: ["reasoning", "evidence", "complete", "reflection"]`
+  instead of the assignment's real criteria, and `/rubrics` still creates every
+  criterion worth 10 points. Both are small and both were left out to keep the
+  grading diff about grading.
+- **US-05 smoke coverage** — `/my-work` is in the sweep, but the smoke client
+  does not set the `active_user_id` cookie, so only the operator path is
+  exercised. The teacher-sees-only-themselves branch is untested; the fix is
+  cookie support in `scripts/smoke.mjs`.
 - **Dashboard risk metrics** (`atRiskStudents`, `attendanceConcerns`) are
   computed over at most 50 students rather than the whole school, because they
   depend on `scoreStudentRisk`. The UI labels this when it truncates. The real
@@ -83,6 +94,16 @@ reason, check for orphans before debugging your code.
 **Verify data, not status codes.** A 200 only proves the page did not throw.
 `/students?status=DROP` returning all four students is what proves an invalid
 enum is being ignored rather than forwarded to Prisma.
+
+**Watch for enum values that reach the bottom of an `if` chain.** The
+late-unscored grade bug (US-06) was not a wrong line — it was a missing branch,
+so a case silently contributed nothing. There was no wrong-looking code to spot
+in review. Enumerate the states and check each one is handled deliberately.
+
+**"Absent" and "zero" are different values.** A blank rubric criterion means
+"not scored yet", and `Number("")` turning it into 0 would have silently awarded
+nothing for every criterion a teacher had not reached. Conflating null with a
+zero value is one of the most common data-modelling errors there is.
 
 **Seed data hides paging bugs.** With four students, `total: rows.length` and a
 real `count()` are indistinguishable. Any fixture set smaller than one page
