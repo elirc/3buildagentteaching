@@ -6,9 +6,11 @@ import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime } from "@/lib/format";
 import { deadLetterBackgroundJob, retryBackgroundJob, runFailedJobInvestigationAgent } from "@/lib/actions";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { getActorCapabilities } from "@/lib/capabilities";
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const { can } = await getActorCapabilities();
   const job = await prisma.backgroundJob.findUnique({ where: { id } });
   if (!job) notFound();
   const [latestRun, audits, logs] = await Promise.all([
@@ -29,12 +31,36 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           <Card>
             <CardHeader title="Job Controls" />
             <div className="ui-actions" style={{ justifyContent: "flex-start" }}>
-              <ActionForm action={retryBackgroundJob}><input type="hidden" name="id" value={job.id} /><SubmitButton variant="primary">Retry failed job</SubmitButton></ActionForm>
-              <ActionForm action={deadLetterBackgroundJob}><input type="hidden" name="id" value={job.id} /><SubmitButton variant="danger">Mark dead-lettered</SubmitButton></ActionForm>
+              {/*
+                Disabled rather than hidden. An operator who cannot retry still
+                needs to know retrying is the thing that would happen here — the
+                title attribute tells them why they cannot, which is more useful
+                than an empty card that looks broken.
+              */}
+              <ActionForm action={retryBackgroundJob}>
+                <input type="hidden" name="id" value={job.id} />
+                <SubmitButton variant="primary" disabled={!can("job:retry")}>Retry failed job</SubmitButton>
+              </ActionForm>
+              <ActionForm action={deadLetterBackgroundJob}>
+                <input type="hidden" name="id" value={job.id} />
+                <SubmitButton variant="danger" disabled={!can("job:deadLetter")}>Mark dead-lettered</SubmitButton>
+              </ActionForm>
             </div>
+            {!can("job:retry") ? <p className="muted">Job controls require an Admin or School Manager role.</p> : null}
             {job.errorMessage ? <p><strong>Error:</strong> {job.errorMessage}</p> : null}
           </Card>
-          <AgentPanel title="Failed Job Investigation Panel" run={latestRun} action={<ActionForm action={runFailedJobInvestigationAgent}><input type="hidden" name="jobId" value={job.id} /><SubmitButton variant="primary">Run investigation</SubmitButton></ActionForm>} />
+          <AgentPanel
+            title="Failed Job Investigation Panel"
+            run={latestRun}
+            action={
+              can("agent:run") ? (
+                <ActionForm action={runFailedJobInvestigationAgent}>
+                  <input type="hidden" name="jobId" value={job.id} />
+                  <SubmitButton variant="primary">Run investigation</SubmitButton>
+                </ActionForm>
+              ) : null
+            }
+          />
           <Card><CardHeader title="Payload" /><JsonBlock value={job.payload} /></Card>
         </div>
         <div className="stack">

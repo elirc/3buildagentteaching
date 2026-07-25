@@ -4,8 +4,12 @@ import { runNextWorkerJob } from "@/lib/actions";
 import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { guardRoute } from "@/components/route-guard";
 
 export default async function WorkerJobsPage() {
+  const denied = await guardRoute("/worker-jobs");
+  if (denied) return denied;
+
   const overview = await getAgentOperationsOverview();
 
   return (

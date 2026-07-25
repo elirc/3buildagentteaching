@@ -3,8 +3,12 @@ import { prisma } from "@agentic-edu/db";
 import { getAcademicOperationsOverview } from "@agentic-edu/application";
 import { createGuardian, linkGuardianToStudent } from "@/lib/actions";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { guardRoute } from "@/components/route-guard";
 
 export default async function GuardiansPage() {
+  const denied = await guardRoute("/guardians");
+  if (denied) return denied;
+
   const [overview, students] = await Promise.all([
     getAcademicOperationsOverview(),
     prisma.student.findMany({ orderBy: [{ lastName: "asc" }, { firstName: "asc" }] })

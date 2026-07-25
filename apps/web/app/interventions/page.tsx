@@ -4,8 +4,12 @@ import { StatusBadge } from "@/components/status-badge";
 import { formatDate } from "@/lib/format";
 import { createInterventionPlan, createSupportNote, updateInterventionStatus } from "@/lib/actions";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { guardRoute } from "@/components/route-guard";
 
 export default async function InterventionsPage() {
+  const denied = await guardRoute("/interventions");
+  if (denied) return denied;
+
   const [plans, students] = await Promise.all([
     prisma.interventionPlan.findMany({ include: { student: true, createdBy: true }, orderBy: [{ status: "asc" }, { followUpDate: "asc" }] }),
     prisma.student.findMany({ orderBy: { lastName: "asc" } })

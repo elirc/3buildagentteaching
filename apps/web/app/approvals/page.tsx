@@ -5,8 +5,12 @@ import { decideInterventionApproval, requestInterventionApproval } from "@/lib/a
 import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { guardRoute } from "@/components/route-guard";
 
 export default async function ApprovalsPage() {
+  const denied = await guardRoute("/approvals");
+  if (denied) return denied;
+
   const [overview, plans] = await Promise.all([
     getAcademicOperationsOverview(),
     prisma.interventionPlan.findMany({ include: { student: true }, orderBy: { createdAt: "desc" } })

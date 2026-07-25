@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ROLE_LABELS } from "@agentic-edu/shared";
 import { DevUserSwitcher } from "@/components/dev-user-switcher";
+import { getActorCapabilities } from "@/lib/capabilities";
+import { navItemsForRole } from "@/lib/navigation";
 
 export const metadata: Metadata = {
   title: "Agentic Education Ops",
@@ -9,33 +12,12 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-const nav = [
-  ["Dashboard", "/"],
-  ["Teachers", "/teachers"],
-  ["Students", "/students"],
-  ["Courses", "/courses"],
-  ["Class Sections", "/sections"],
-  ["Academic Terms", "/terms"],
-  ["Enrollments", "/enrollments"],
-  ["Assignments", "/assignments"],
-  ["Rubrics", "/rubrics"],
-  ["Gradebook", "/gradebook"],
-  ["Attendance", "/attendance"],
-  ["At-Risk Students", "/at-risk"],
-  ["Interventions", "/interventions"],
-  ["Approvals", "/approvals"],
-  ["Guardians", "/guardians"],
-  ["Notifications", "/notifications"],
-  ["Jobs", "/jobs"],
-  ["Worker Jobs", "/worker-jobs"],
-  ["Logs", "/logs"],
-  ["Agent Runs", "/agent-runs"],
-  ["Agent Ops", "/agent-ops"],
-  ["Agent Recommendations", "/agent-recommendations"],
-  ["Audit Events", "/audit-events"]
-] as const;
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // The layout is already dynamic, so resolving the actor here costs one query
+  // that every page underneath would otherwise repeat.
+  const { actor } = await getActorCapabilities();
+  const nav = navItemsForRole(actor.role);
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
@@ -46,16 +28,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span>Modular monolith learning codebase</span>
             </a>
             <nav className="app-nav" aria-label="Main navigation">
-              {nav.map(([label, href]) => (
-                <a key={href} href={href}>
-                  {label}
+              {nav.map((item) => (
+                <a key={item.href} href={item.href}>
+                  {item.label}
                 </a>
               ))}
             </nav>
           </aside>
           <main className="app-main">
             <div className="app-topbar">
-              <span className="muted">Local development user simulation</span>
+              {/*
+                Showing the acting role is not decoration. Every "why can't I do
+                this?" in a role-switching app is answered by looking here, and
+                before this the only place to find it was /settings.
+              */}
+              <span className="muted">
+                Acting as <strong>{ROLE_LABELS[actor.role]}</strong>
+              </span>
               <DevUserSwitcher />
             </div>
             <div className="app-content">{children}</div>
