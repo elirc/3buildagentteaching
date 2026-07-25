@@ -21,6 +21,7 @@ import {
   approvalDecisionSchema,
   assignmentSchema,
   attendanceSchema,
+  attendanceStatusSchema,
   classSectionSchema,
   courseSchema,
   guardianRelationshipSchema,
@@ -31,6 +32,8 @@ import {
   supportNoteSchema,
   teacherSchema
 } from "@agentic-edu/domain";
+import { parseSheetDate } from "@agentic-edu/application";
+import type { AttendanceStatus as AttendanceStatusInput } from "@agentic-edu/shared";
 import { getCurrentActor } from "@/lib/current-user";
 import { runAction, type FormState } from "@/lib/action-result";
 
@@ -305,6 +308,42 @@ export async function recordAttendance(_previous: FormState, formData: FormData)
     );
     revalidatePath("/attendance");
     return attendance;
+  });
+}
+
+export async function recordSectionAttendance(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const classSectionId = stringValue(formData, "classSectionId");
+    const dateParam = stringValue(formData, "date");
+
+    /*
+     * Status inputs are radios named `status_<studentId>`. A student with no
+     * radio selected is skipped rather than defaulted — an unmarked row means
+     * "not recorded", and silently writing Present for it would fabricate
+     * attendance data nobody entered.
+     */
+    const entries: Array<{ studentId: string; status: AttendanceStatusInput; notes: string | null }> = [];
+    for (const [key, value] of formData.entries()) {
+      if (!key.startsWith("status_")) continue;
+      const studentId = key.slice("status_".length);
+      entries.push({
+        studentId,
+        status: attendanceStatusSchema.parse(String(value)),
+        notes: optionalString(formData, `notes_${studentId}`)
+      });
+    }
+
+    const saved = await attendanceService.recordSectionAttendance(actor, {
+      classSectionId,
+      date: parseSheetDate(dateParam),
+      recordedByTeacherId: stringValue(formData, "recordedByTeacherId"),
+      entries
+    });
+
+    revalidatePath(`/sections/${classSectionId}/attendance`);
+    revalidatePath("/attendance");
+    return saved;
   });
 }
 
