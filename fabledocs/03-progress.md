@@ -14,13 +14,15 @@ actually stands. Updated when a story merges.
 | US-04 | [#6](https://github.com/elirc/3buildagentteaching/pull/6) | 10 integration tests on a real Postgres, a route+data smoke test, and a 3-job GitHub Actions pipeline |
 | US-05 | [#8](https://github.com/elirc/3buildagentteaching/pull/8) | `/my-work` grading queue ordered by urgency (wait time weighted by student risk), plus a needs-attention panel |
 | US-06 | [#9](https://github.com/elirc/3buildagentteaching/pull/9) | Criterion-by-criterion rubric grading with derived totals and partial saves; late-unscored grade-average fix |
+| US-07 | [#11](https://github.com/elirc/3buildagentteaching/pull/11) | Whole-section attendance register in one transaction; session-aware absence streaks; local-midnight date parsing |
+| US-08 | [#12](https://github.com/elirc/3buildagentteaching/pull/12) | `/family` guardian portal with query-level scoping; the Guardian permission branch; `notification:readOwn` |
 
-**Test count: 28 → 75** (60 unit + 15 integration), plus a smoke pass over 25
-routes and 5 data assertions. CI green on all three jobs for every merge.
+**Test count: 28 → 87** (72 unit + 15 integration), plus a smoke pass over 27
+routes and 6 data assertions. CI green on all three jobs for every merge.
 
 ## Not started
 
-US-07 through US-20, exactly as written in `02-user-stories.md`. Nothing in
+US-09 through US-20, exactly as written in `02-user-stories.md`. Nothing in
 those stories has been superseded — the file is still the spec.
 
 ## How to verify your work now
@@ -66,6 +68,21 @@ up, it is a small piece of work, not a rewrite.
   does not set the `active_user_id` cookie, so only the operator path is
   exercised. The teacher-sees-only-themselves branch is untested; the fix is
   cookie support in `scripts/smoke.mjs`.
+- **US-07 criterion 8** — `historicalAverageIssuePoints` is still hardcoded to
+  `2` for every target in `agent-run-service.ts`. It is an agent-input concern
+  and belongs with US-17/US-19.
+- **US-08 criterion 7** — `/students/[id]` has no per-actor guard, so a Guardian
+  who types that URL still reaches the staff page. The nav does not offer it and
+  `getGuardianDashboard` refuses unlinked children, but that is defence by
+  obscurity. Needs a route guard on the detail page.
+- **Smoke cannot authenticate.** `scripts/smoke.mjs` never sets the
+  `active_user_id` cookie, so every check runs as the default Admin. That means
+  `/my-work` only exercises the operator path and `/family` only exercises its
+  no-access branch. **Two stories are now blocked on this** — it should be the
+  next piece of infrastructure work rather than a third apology.
+- **Untested writes** — `recordSectionAttendance` and
+  `updateGuardianPreferences` have no integration tests. Their rules are
+  unit-tested through the domain layer; the transactional paths are not.
 - **Dashboard risk metrics** (`atRiskStudents`, `attendanceConcerns`) are
   computed over at most 50 students rather than the whole school, because they
   depend on `scoreStudentRisk`. The UI labels this when it truncates. The real
@@ -104,6 +121,17 @@ in review. Enumerate the states and check each one is handled deliberately.
 "not scored yet", and `Number("")` turning it into 0 would have silently awarded
 nothing for every criterion a teacher had not reached. Conflating null with a
 zero value is one of the most common data-modelling errors there is.
+
+**Match identifiers, not markup, in smoke assertions.** A `/sections/.../attendance`
+assertion anchored on `name=\"status_` failed while the page was perfectly
+fine — React streams part of the markup inside a JSON payload where quotes are
+escaped, so the pattern matched the server-rendered half and missed the streamed
+half. The field name is stable; the quoting around it is not.
+
+**When a new feature breaks a test, decide which one is wrong first.** US-08
+broke "Admin sees every link". The instinct is to grant Admin access and go
+green; the correct answer was that a portal scoped to one family has nothing to
+show an administrator, and the test's assumption had simply expired.
 
 **Seed data hides paging bugs.** With four students, `total: rows.length` and a
 real `count()` are indistinguishable. Any fixture set smaller than one page
