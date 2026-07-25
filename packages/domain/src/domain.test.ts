@@ -9,7 +9,9 @@ import {
   classifyPerformance,
   canRecordAttendance,
   canTransitionApproval,
+  canReduceCapacity,
   decideEnrollment,
+  decideWaitlistPromotion,
   determineSubmissionStatus,
   findLongestAbsenceStreak,
   guardianRelationshipSchema,
@@ -66,6 +68,57 @@ describe("enrollment rules", () => {
         hasExistingActiveEnrollment: true
       }).allowed
     ).toBe(false);
+  });
+});
+
+describe("waitlist promotion", () => {
+  const base = {
+    studentStatus: "Active" as const,
+    sectionStatus: "Active" as const,
+    teacherStatus: "Active" as const,
+    enrollmentStatus: "Waitlisted" as const,
+    activeEnrollmentCount: 2,
+    sectionCapacity: 3
+  };
+
+  it("promotes into a free seat", () => {
+    expect(decideWaitlistPromotion(base)).toEqual({ allowed: true, status: "Enrolled" });
+  });
+
+  it("re-checks capacity at promotion time", () => {
+    // The roster page said "1 seat open" when it rendered. Someone else may
+    // have taken it since. Decide when writing, not when rendering.
+    expect(decideWaitlistPromotion({ ...base, activeEnrollmentCount: 3 }).allowed).toBe(false);
+  });
+
+  it("refuses a student who has since withdrawn", () => {
+    // A student can leave the school while sitting on a waitlist. Promoting
+    // them would quietly re-activate a record the office closed.
+    expect(decideWaitlistPromotion({ ...base, studentStatus: "Withdrawn" }).allowed).toBe(false);
+  });
+
+  it("refuses anything that is not actually waitlisted", () => {
+    expect(decideWaitlistPromotion({ ...base, enrollmentStatus: "Dropped" }).allowed).toBe(false);
+    expect(decideWaitlistPromotion({ ...base, enrollmentStatus: "Enrolled" }).allowed).toBe(false);
+  });
+});
+
+describe("capacity changes", () => {
+  it("allows raising capacity and holding it at the current count", () => {
+    expect(canReduceCapacity({ newCapacity: 30, activeEnrollmentCount: 12 }).allowed).toBe(true);
+    expect(canReduceCapacity({ newCapacity: 12, activeEnrollmentCount: 12 }).allowed).toBe(true);
+  });
+
+  it("refuses a capacity below the students already seated", () => {
+    // Otherwise the section is permanently over-subscribed and every later
+    // enrollment check refuses without explaining why.
+    const decision = canReduceCapacity({ newCapacity: 2, activeEnrollmentCount: 5 });
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toContain("5 student(s)");
+  });
+
+  it("refuses a capacity of zero", () => {
+    expect(canReduceCapacity({ newCapacity: 0, activeEnrollmentCount: 0 }).allowed).toBe(false);
   });
 });
 

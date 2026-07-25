@@ -35,6 +35,7 @@ import {
 import { parseSheetDate } from "@agentic-edu/application";
 import type { AttendanceStatus as AttendanceStatusInput } from "@agentic-edu/shared";
 import { getCurrentActor } from "@/lib/current-user";
+import { AppError } from "@agentic-edu/application";
 import { runAction, type FormState } from "@/lib/action-result";
 
 /*
@@ -187,6 +188,52 @@ export async function dropEnrollment(_previous: FormState, formData: FormData): 
     const enrollment = await enrollmentService.dropEnrollment(actor, stringValue(formData, "id"));
     revalidatePath("/enrollments");
     return enrollment;
+  });
+}
+
+export async function promoteFromWaitlist(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const enrollment = await enrollmentService.promoteFromWaitlist(actor, stringValue(formData, "id"));
+    revalidatePath(`/sections/${enrollment.classSectionId}/roster`);
+    revalidatePath("/enrollments");
+    return enrollment;
+  });
+}
+
+export async function bulkEnroll(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const classSectionId = stringValue(formData, "classSectionId");
+    // Multiple checkboxes share the name `studentIds`, so getAll is required —
+    // formData.get would silently take only the first one selected.
+    const studentIds = formData.getAll("studentIds").map((value) => String(value)).filter(Boolean);
+
+    const results = await enrollmentService.bulkEnroll(actor, {
+      classSectionId,
+      studentIds,
+      allowWaitlist: formData.get("allowWaitlist") === "on"
+    });
+
+    revalidatePath(`/sections/${classSectionId}/roster`);
+    revalidatePath("/enrollments");
+
+    /*
+     * A partly-successful batch is reported as a failure so the operator sees
+     * the per-student reasons. Returning ok:true with a quiet list of failures
+     * would render as success and the rejected students would simply never
+     * appear on the roster, with nothing to explain why.
+     */
+    const failed = results.filter((result) => !result.ok);
+    if (failed.length > 0) {
+      throw new AppError(
+        "CONFLICT",
+        `Enrolled ${results.length - failed.length} of ${results.length}. ` +
+          failed.map((f) => `${f.studentId}: ${f.reason}`).join(" / "),
+        { results }
+      );
+    }
+    return results;
   });
 }
 
