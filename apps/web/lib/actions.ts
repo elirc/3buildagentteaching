@@ -708,6 +708,26 @@ export async function decideAgentRecommendation(_previous: FormState, formData: 
   });
 }
 
+export async function runWorkerBatch(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const limit = Number(formData.get("limit") ?? 10);
+    const processed = await workerService.runNextBatch(actor, Number.isFinite(limit) ? limit : 10);
+    revalidatePath("/worker-jobs");
+    revalidatePath("/jobs");
+    return processed;
+  });
+}
+
+export async function releaseDueJobs(_previous: FormState, _formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const released = await workerService.releaseDueJobs(actor);
+    revalidatePath("/worker-jobs");
+    return { released };
+  });
+}
+
 export async function runNextWorkerJob(_previous: FormState, _formData: FormData): Promise<FormState> {
   return runAction(async () => {
     const actor = await getCurrentActor();

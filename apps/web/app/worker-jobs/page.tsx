@@ -1,6 +1,6 @@
 import { Card, CardHeader, DataTable, PageHeader, Stat } from "@agentic-edu/ui";
 import { getAgentOperationsOverview } from "@agentic-edu/application";
-import { runNextWorkerJob } from "@/lib/actions";
+import { releaseDueJobs, runNextWorkerJob, runWorkerBatch } from "@/lib/actions";
 import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
 import { ActionForm, SubmitButton } from "@/components/action-form";
@@ -18,9 +18,18 @@ export default async function WorkerJobsPage() {
         title="Worker Jobs"
         description="Deterministic local worker simulation with idempotency keys, retry scheduling, and lock visibility."
         actions={
-          <ActionForm action={runNextWorkerJob}>
-            <SubmitButton variant="primary">Run next job</SubmitButton>
-          </ActionForm>
+          <div className="ui-actions">
+            <ActionForm action={runNextWorkerJob}>
+              <SubmitButton variant="primary">Run next job</SubmitButton>
+            </ActionForm>
+            <ActionForm action={runWorkerBatch}>
+              <input type="hidden" name="limit" value="10" />
+              <SubmitButton variant="secondary">Run 10 jobs</SubmitButton>
+            </ActionForm>
+            <ActionForm action={releaseDueJobs}>
+              <SubmitButton variant="ghost">Release due jobs</SubmitButton>
+            </ActionForm>
+          </div>
         }
       />
       <div className="ui-stat-grid">
