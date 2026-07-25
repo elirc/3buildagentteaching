@@ -2,8 +2,12 @@ import { Card, CardHeader, DataTable, PageHeader, Stat } from "@agentic-edu/ui";
 import { getAgentOperationsOverview } from "@agentic-edu/application";
 import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
+import { guardRoute } from "@/components/route-guard";
 
 export default async function AgentOpsPage() {
+  const denied = await guardRoute("/agent-ops");
+  if (denied) return denied;
+
   const overview = await getAgentOperationsOverview();
 
   return (

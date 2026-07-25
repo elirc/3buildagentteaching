@@ -3,8 +3,12 @@ import { prisma } from "@agentic-edu/db";
 import { scoreOperationalAnomaly } from "@agentic-edu/observability";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime } from "@/lib/format";
+import { guardRoute } from "@/components/route-guard";
 
 export default async function LogsPage({ searchParams }: { searchParams?: Promise<{ level?: string; service?: string; environment?: string; entityType?: string; userId?: string; from?: string; to?: string }> }) {
+  const denied = await guardRoute("/logs");
+  if (denied) return denied;
+
   const params = (await searchParams) ?? {};
   const timestamp =
     params.from || params.to

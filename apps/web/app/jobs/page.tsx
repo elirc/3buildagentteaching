@@ -2,8 +2,12 @@ import { Card, CardHeader, DataTable, PageHeader } from "@agentic-edu/ui";
 import { prisma } from "@agentic-edu/db";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime } from "@/lib/format";
+import { guardRoute } from "@/components/route-guard";
 
 export default async function JobsPage({ searchParams }: { searchParams?: Promise<{ status?: string }> }) {
+  const denied = await guardRoute("/jobs");
+  if (denied) return denied;
+
   const params = (await searchParams) ?? {};
   const jobs = await prisma.backgroundJob.findMany({
     where: { status: params.status ? (params.status as never) : undefined },

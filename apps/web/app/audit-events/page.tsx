@@ -1,8 +1,12 @@
 import { Card, CardHeader, DataTable, JsonBlock, PageHeader } from "@agentic-edu/ui";
 import { prisma } from "@agentic-edu/db";
 import { formatDateTime } from "@/lib/format";
+import { guardRoute } from "@/components/route-guard";
 
 export default async function AuditEventsPage() {
+  const denied = await guardRoute("/audit-events");
+  if (denied) return denied;
+
   const events = await prisma.auditEvent.findMany({ include: { actor: true }, orderBy: { createdAt: "desc" }, take: 100 });
   return (
     <>
