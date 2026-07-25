@@ -253,6 +253,24 @@ describe("role permissions", () => {
     expect(canPerform({ id: "u1", role: "Teacher", teacherId: "teacher_1" }, "student:create")).toBe(false);
   });
 
+  it("grants Guardian and Viewer nothing at all (pinned before US-08 changes it)", () => {
+    // These two roles fall through canPerform to `return false`. That is
+    // intentional for Viewer — a read-only observer — and a gap for Guardian,
+    // who has a profile table, a digest opt-in flag and notifications addressed
+    // to them, but cannot even mark one read.
+    //
+    // This test pins today's behaviour so US-08 has to change it *deliberately*.
+    // When the Guardian branch lands, this test should fail and be rewritten —
+    // that failure is the signal that the permission surface moved.
+    const guardian = { id: "user_guardian", role: "Guardian" } as const;
+    const viewer = { id: "user_viewer", role: "Viewer" } as const;
+
+    for (const action of ["notification:manage", "submission:create", "supportNote:create", "agent:run"] as const) {
+      expect(canPerform(guardian, action)).toBe(false);
+      expect(canPerform(viewer, action)).toBe(false);
+    }
+  });
+
   it("limits students to their own submissions", () => {
     expect(canPerform({ id: "u2", role: "Student", studentId: "student_1" }, "submission:create", { studentId: "student_1" })).toBe(true);
     expect(canPerform({ id: "u2", role: "Student", studentId: "student_1" }, "submission:create", { studentId: "student_2" })).toBe(false);
