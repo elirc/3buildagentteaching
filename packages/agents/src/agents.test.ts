@@ -70,6 +70,66 @@ describe("mock agent heuristics", () => {
     expect(result.output.riskLevel).toMatch(/High|Critical/);
   });
 
+  it("routes a Critical student to Admin, not Advisor", () => {
+    // The output text already said "escalate to school manager and advisor" for
+    // Critical, while ownerRole — the field that actually decides whose queue
+    // it lands in — said Advisor. Escalation that does not change the owner is
+    // not escalation.
+    const critical = atRiskStudentDetectionAgent.run({
+      studentName: "Maya Johnson",
+      gradeSummary: {
+        average: 41,
+        earnedPoints: 41,
+        possiblePoints: 100,
+        missingCount: 6,
+        lateCount: 2,
+        gradedCount: 4,
+        trend: "Declining",
+        performanceBand: "AtRisk"
+      },
+      attendanceSummary: {
+        present: 1,
+        absent: 9,
+        tardy: 2,
+        excused: 0,
+        issuePoints: 10,
+        attendanceRate: 8,
+        concernLevel: "Severe",
+        longestAbsenceStreak: 6
+      },
+      interventionHistory: [],
+      recentSupportNotes: []
+    });
+
+    expect(critical.output.riskLevel).toBe("Critical");
+    expect(critical.recommendations[0]?.owner).toBe("Admin");
+    expect(critical.recommendations[0]?.priority).toBe("high");
+  });
+
+  it("still routes a High student to Advisor and a Low student to Teacher", () => {
+    // Guard against over-correcting: only Critical moved.
+    const high = atRiskStudentDetectionAgent.run({
+      studentName: "Liam",
+      // Scored deliberately, not guessed: base 10 + 25 (average < 70)
+      // + 20 (missing > 3) + 12 (issuePoints >= 3) = 67, which lands in High
+      // (60-79). An earlier version of this fixture used 5 absences and a
+      // declining trend and totalled 95 — Critical — which would have made the
+      // test assert the opposite of its own name.
+      gradeSummary: {
+        average: 62, earnedPoints: 62, possiblePoints: 100, missingCount: 4,
+        lateCount: 0, gradedCount: 4, trend: "Stable", performanceBand: "AtRisk"
+      },
+      attendanceSummary: {
+        present: 8, absent: 2, tardy: 2, excused: 0, issuePoints: 3,
+        attendanceRate: 66, concernLevel: "Watch", longestAbsenceStreak: 1
+      },
+      interventionHistory: [],
+      recentSupportNotes: []
+    });
+    expect(high.output.riskLevel).toBe("High");
+    expect(high.recommendations[0]?.owner).toBe("Advisor");
+  });
+
   it("assignment feedback agent flags incomplete late work", () => {
     const result = assignmentFeedbackAgent.run({
       assignment: { title: "Budget Model Project", type: "Project", dueDate: new Date("2026-01-10"), pointsPossible: 50 },

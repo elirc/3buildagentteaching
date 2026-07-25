@@ -52,7 +52,24 @@ export const atRiskStudentDetectionAgent: AgentDefinition<AtRiskInput, AtRiskOut
       ]),
       findings,
       recommendations: [
-        recommendation(result.level === "Low" ? "Teacher" : "Advisor", recommendedIntervention, result.level === "Critical" || result.level === "High" ? "high" : "medium")
+        /*
+         * Critical escalates to Admin, not Advisor.
+         *
+         * The output's escalationRecommendation text already said "escalate to
+         * school manager and advisor" for Critical — but ownerRole is the field
+         * that actually routes the work, and it said Advisor. So the most severe
+         * cases never appeared in an administrator's queue; the escalation
+         * existed only as prose in a JSON blob nobody filters on.
+         *
+         * A recommendation's owner is the field that decides whose inbox it
+         * lands in. Advice about escalation that does not change the owner is
+         * not escalation.
+         */
+        recommendation(
+          result.level === "Critical" ? "Admin" : result.level === "Low" ? "Teacher" : "Advisor",
+          recommendedIntervention,
+          result.level === "Critical" || result.level === "High" ? "high" : "medium"
+        )
       ],
       limitations: [
         "Risk score is a heuristic, not a clinical or legal determination.",

@@ -469,14 +469,17 @@ async function buildTeacherWorkloadInput(teacherId: string): Promise<TeacherWork
       }))
     );
     const attendanceSummary = summarizeAttendance(student.attendanceRecords.map((record) => ({ status: record.status, date: record.date })));
-    return (
-      scoreStudentRisk({
-        gradeSummary,
-        attendanceSummary,
-        activeInterventionCount: student.interventionPlans.filter((plan) => plan.status === "Active").length,
-        recentSupportNoteCount: student.supportNotes.length
-      }).level === "High"
-    );
+    const risk = scoreStudentRisk({
+      gradeSummary,
+      attendanceSummary,
+      activeInterventionCount: student.interventionPlans.filter((plan) => plan.status === "Active").length,
+      recentSupportNoteCount: student.supportNotes.length
+    });
+
+    // High OR Critical. Counting only "High" excluded the worst cases from a
+    // teacher's workload figure — the students generating the most work were
+    // precisely the ones the number ignored.
+    return risk.level === "High" || risk.level === "Critical";
   }).length;
 
   return {
