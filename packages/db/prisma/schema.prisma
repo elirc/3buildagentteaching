@@ -642,8 +642,10 @@ model BackgroundJob {
   idempotencyKey        String?      @unique
   scheduledFor          DateTime?
   nextRunAt             DateTime?
-  lockedAt              DateTime?
-  lockOwner             String?
+  // Locking lives entirely in WorkerLock, which carries expiry semantics.
+  // BackgroundJob.lockedAt/lockOwner duplicated it with no expiry and both were
+  // maintained in the same transaction — two overlapping mechanisms and no
+  // answer to which was authoritative. Removed in US-11.
   ignoredAt             DateTime?
   startedAt             DateTime?
   finishedAt            DateTime?

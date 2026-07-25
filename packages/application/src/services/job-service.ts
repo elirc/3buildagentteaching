@@ -1,10 +1,90 @@
-import { prisma } from "@agentic-edu/db";
+import { Prisma, prisma } from "@agentic-edu/db";
+import type { JobType } from "@agentic-edu/shared";
 import { markDeadLettered, retryJob } from "@agentic-edu/domain";
 import { AppError } from "../errors";
 import { assertCan, type ActorContext } from "../context";
-import { createAuditEvent } from "../audit";
+import { createAuditEvent, type PrismaTransaction } from "../audit";
 
 export const jobService = {
+  /**
+   * The only way a BackgroundJob is created.
+   *
+   * Before this, nothing in the application enqueued anything — the queue was
+   * eight rows from the seed that drained and never refilled.
+   *
+   * Takes an optional `tx` so a producer can enqueue inside the transaction of
+   * the event that caused it. That matters: grading a submission and queueing
+   * its recalculation must either both happen or neither, or the queue ends up
+   * holding work for a grade that was rolled back.
+   *
+   * Idempotency is a no-op returning the existing row rather than an error. A
+   * double-clicked button, a retried request, and a producer firing twice are
+   * all normal, and none of them is a problem the caller should have to handle.
+   */
+  async enqueue(
+    actor: ActorContext,
+    input: {
+      type: JobType;
+      payload: Prisma.InputJsonValue;
+      idempotencyKey: string;
+      maxAttempts?: number;
+      scheduledFor?: Date | null;
+      relatedStudentId?: string | null;
+      relatedTeacherId?: string | null;
+      relatedClassSectionId?: string | null;
+      relatedAssignmentId?: string | null;
+    },
+    tx?: PrismaTransaction
+  ) {
+    const client = tx ?? prisma;
+
+    const existing = await client.backgroundJob.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (existing) {
+      /*
+       * Only in-flight work is deduplicated. A Succeeded or DeadLettered job
+       * with the same key is finished history — re-enqueueing the same weekly
+       * digest next week must produce a new job, and blocking it forever would
+       * be a far worse bug than an occasional duplicate.
+       *
+       * Callers that want per-period uniqueness put the period in the key,
+       * which is why the seed uses "digest:student_maya:week_2026_21".
+       */
+      if (existing.status === "Queued" || existing.status === "Running" || existing.status === "Retrying") {
+        return existing;
+      }
+    }
+
+    const job = await client.backgroundJob.create({
+      data: {
+        type: input.type,
+        status: "Queued",
+        attempts: 0,
+        maxAttempts: input.maxAttempts ?? 3,
+        payload: input.payload,
+        // Suffixed when a finished job already holds the key, so history is
+        // kept and the unique constraint is respected.
+        idempotencyKey: existing ? `${input.idempotencyKey}:${Date.now()}` : input.idempotencyKey,
+        scheduledFor: input.scheduledFor ?? null,
+        nextRunAt: input.scheduledFor ?? null,
+        relatedStudentId: input.relatedStudentId ?? null,
+        relatedTeacherId: input.relatedTeacherId ?? null,
+        relatedClassSectionId: input.relatedClassSectionId ?? null,
+        relatedAssignmentId: input.relatedAssignmentId ?? null
+      }
+    });
+
+    await createAuditEvent(client, {
+      actorUserId: actor.id,
+      action: "job.enqueued",
+      entityType: "BackgroundJob",
+      entityId: job.id,
+      after: job
+    });
+
+    return job;
+  },
+
+
   async retryBackgroundJob(actor: ActorContext, id: string) {
     assertCan(actor, "job:retry");
     return prisma.$transaction(async (tx) => {

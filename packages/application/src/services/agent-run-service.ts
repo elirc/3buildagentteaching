@@ -29,6 +29,8 @@ import {
 import type { AgentRunStatus, AgentTargetType, AgentType } from "@agentic-edu/shared";
 import { assertCan, type ActorContext } from "../context";
 import { createAuditEvent } from "../audit";
+import { jobService } from "./job-service";
+import type { JobPayload } from "../jobs/schemas";
 
 function jsonSafe(value: unknown) {
   return JSON.parse(JSON.stringify(value));
@@ -143,6 +145,31 @@ async function persistAgentRun<TInput, TOutput>(input: {
 }
 
 export const agentRunService = {
+  /**
+   * Queues an agent instead of running it inline.
+   *
+   * Running an agent inside a request is fine for one student. StudentSuccessReview
+   * over a whole year group is not — it fans out to three sub-agents each, and
+   * the request would time out long before the work finished.
+   *
+   * The permission check happens here, at enqueue time, not when the worker
+   * later picks it up. The worker runs as whoever pressed "Run next job", and
+   * checking then would ask the wrong question about the wrong person.
+   */
+  async enqueueAgentRun(
+    actor: ActorContext,
+    input: { agentType: JobPayload<"AgentRun">["agentType"]; targetId: string }
+  ) {
+    assertCan(actor, "agent:run", input.agentType === "TeacherWorkloadInsight" ? { teacherId: input.targetId } : { studentId: input.targetId });
+
+    return jobService.enqueue(actor, {
+      type: "AgentRun",
+      payload: { agentType: input.agentType, targetId: input.targetId },
+      idempotencyKey: `agent:${input.agentType}:${input.targetId}`
+    });
+  },
+
+
   async runStudentProgressAgent(actor: ActorContext, studentId: string) {
     assertCan(actor, "agent:run", { studentId });
     const agentInput = await buildStudentProgressInput(studentId, actor.role);
