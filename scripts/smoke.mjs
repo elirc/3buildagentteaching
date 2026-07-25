@@ -155,6 +155,35 @@ const DATA_CHECKS = [
       /class average/i.test(withoutSwitcher(html)) ? "class average leaked to a student" : null
   },
   {
+    // The record-level guard: a student typing a staff URL is refused. Before
+    // fix/record-level-route-guard this rendered the full staff page including
+    // AdvisorOnly support notes and the audit history.
+    url: "/students/student_maya",
+    as: "user_student_maya",
+    expect: (html) =>
+      /do not have access/i.test(withoutSwitcher(html))
+        ? null
+        : "a student must not reach the staff student record"
+  },
+  {
+    url: "/students/student_maya",
+    as: "user_guardian",
+    expect: (html) =>
+      /do not have access/i.test(withoutSwitcher(html))
+        ? null
+        : "a guardian must not reach the staff student record"
+  },
+  {
+    // Staff must still be able to open it — a guard that refuses everyone is
+    // not a guard, it is an outage.
+    url: "/students/student_maya",
+    as: "user_teacher_algebra",
+    expect: (html) =>
+      /do not have access/i.test(withoutSwitcher(html))
+        ? "staff must still reach student records"
+        : null
+  },
+  {
     // A Viewer is refused the operational pages by guardRoute.
     url: "/jobs",
     as: "user_viewer",
