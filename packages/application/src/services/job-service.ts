@@ -4,6 +4,7 @@ import { markDeadLettered, retryJob } from "@agentic-edu/domain";
 import { AppError } from "../errors";
 import { assertCan, type ActorContext } from "../context";
 import { createAuditEvent, type PrismaTransaction } from "../audit";
+import { notifyService } from "./notify-service";
 
 export const jobService = {
   /**
@@ -123,6 +124,20 @@ export const jobService = {
         throw new AppError("CONFLICT", decision.reason ?? "Job cannot be dead-lettered.", { jobId: id });
       }
       const job = await tx.backgroundJob.update({ where: { id }, data: { status: "DeadLettered", ignoredAt: new Date(), nextRunAt: null } });
+
+      // A dead-lettered job is work that will never happen unless someone
+      // intervenes. That is exactly the case worth interrupting an operator for.
+      await notifyService.notify(
+        actor,
+        {
+          type: "JobFailure",
+          title: `${job.type} job dead-lettered`,
+          body: job.errorMessage ?? "The job exhausted its retries.",
+          candidates: await notifyService.staffCandidates(tx),
+          metadata: { jobId: job.id }
+        },
+        tx
+      );
       await createAuditEvent(tx, {
         actorUserId: actor.id,
         action: "job.deadLettered",
