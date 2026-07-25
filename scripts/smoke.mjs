@@ -15,6 +15,11 @@
  *      not throw. `/students?status=DROP` returning every student is what
  *      proves an invalid enum is being ignored rather than forwarded to Prisma.
  *
+ * A data check may set `as: "<userId>"` to run as a specific seeded user. The
+ * app's auth is a cookie the dev switcher writes, so sending that cookie is
+ * precisely what a browser does after switching accounts — these are real
+ * role-scoped requests, not a simulation.
+ *
  * Usage:
  *   node scripts/smoke.mjs                  # spawns `npm run dev`, waits, checks, kills
  *   SMOKE_BASE_URL=http://localhost:3000 node scripts/smoke.mjs   # reuse a running server
@@ -80,11 +85,88 @@ const DATA_CHECKS = [
       const n = new Set([...html.matchAll(/\/teachers\/(teacher_[a-z]+)/g)].map((m) => m[1])).size;
       return n === 1 ? null : `teacher search should narrow to 1, got ${n}`;
     }
+  },
+
+  /* ---- role-scoped checks -------------------------------------------------
+   * Everything above runs as the default Admin. These run as a specific seeded
+   * user, which is the only way to exercise the branches that matter most:
+   * a teacher seeing only their own queue, a guardian seeing only their own
+   * child. Both shipped unverified before this.
+   * ------------------------------------------------------------------------ */
+
+  {
+    // Nina Patel teaches Algebra only. Her queue must not contain Biology or
+    // English work — the ?teacherId= override must lose to her own identity.
+    url: "/my-work",
+    as: "user_teacher_algebra",
+    expect: (html) =>
+      /Nina Patel/.test(html) ? null : "teacher should see their own workbench"
+  },
+  {
+    // The guard that matters: a teacher cannot read a colleague's queue by
+    // editing the URL, because actor.teacherId wins over the query param.
+    url: "/my-work?teacherId=teacher_biology",
+    as: "user_teacher_algebra",
+    expect: (html) => {
+      const content = withoutSwitcher(html);
+      return /Nina Patel/.test(content) && !/Marcus Green/.test(content)
+        ? null
+        : "teacherId param must not override the acting teacher";
+    }
+  },
+  {
+    // Denise Johnson is linked to Maya only. Liam and Sophia must not appear.
+    url: "/family",
+    as: "user_guardian",
+    expect: (html) => {
+      const content = withoutSwitcher(html);
+      if (!/Maya/.test(content)) return "guardian should see their own child";
+      if (/Liam|Sophia|Noah/.test(content)) return "guardian must not see other families";
+      return null;
+    }
+  },
+  {
+    // AdvisorOnly note (note_maya_family, "Guardian requested weekly progress
+    // digest") must never reach a parent. Only Shared notes do.
+    url: "/family",
+    as: "user_guardian",
+    expect: (html) =>
+      /requested weekly progress digest/i.test(html)
+        ? "AdvisorOnly support note leaked to a guardian"
+        : null
+  },
+  {
+    // A Viewer is refused the operational pages by guardRoute.
+    url: "/jobs",
+    as: "user_viewer",
+    expect: (html) =>
+      /do not have access/i.test(html) ? null : "Viewer should be refused /jobs"
   }
 ];
 
 function countStudentRows(html) {
   return new Set([...html.matchAll(/\/students\/(student_[a-z]+)/g)].map((m) => m[1])).size;
+}
+
+/**
+ * Strips the dev user switcher before matching.
+ *
+ * The switcher in the top bar lists *every* user in the system for *every*
+ * actor — that is its entire job, and it is labelled "Local development user
+ * simulation". Its <option> elements are layout chrome, not page content.
+ *
+ * Without this, a negative assertion like "a guardian must not see Liam" fails
+ * on every page in the app, because Liam Brooks is always in the dropdown. The
+ * first version of these checks did exactly that and reported a privacy leak
+ * that did not exist.
+ *
+ * Both forms are removed: the server-rendered <option> markup, and the same
+ * elements as they appear inside React's escaped streaming payload.
+ */
+function withoutSwitcher(html) {
+  return html
+    .replace(/<option value="user_[^"]*"[\s\S]*?<\/option>/g, "")
+    .replace(/\\"option\\",\\"user_[^"]*\\",\{[\s\S]*?\]/g, "");
 }
 
 /**
@@ -99,11 +181,22 @@ function countStudentRows(html) {
  * route aborted, the rejection escaped, and node exited with an uncaught
  * DOMException and no report at all.)
  */
-async function get(path) {
+async function get(path, actorUserId) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const res = await fetch(BASE + path, { signal: controller.signal, redirect: "manual" });
+    const res = await fetch(BASE + path, {
+      signal: controller.signal,
+      redirect: "manual",
+      /*
+       * The app has no real auth — DevUserSwitcher writes an `active_user_id`
+       * cookie and getCurrentActor reads it. Sending that header is therefore
+       * exactly what a browser would do after switching accounts, which is why
+       * this is a faithful test of role-scoped behaviour rather than a
+       * simulation of one.
+       */
+      headers: actorUserId ? { cookie: `active_user_id=${actorUserId}` } : undefined
+    });
     return { status: res.status, body: await res.text() };
   } catch (error) {
     const reason = error?.name === "AbortError" ? `timed out after ${REQUEST_TIMEOUT_MS}ms` : String(error?.message ?? error);
@@ -150,10 +243,11 @@ try {
     }
 
     for (const check of DATA_CHECKS) {
-      const { status, body, reason } = await get(check.url);
+      const { status, body, reason } = await get(check.url, check.as);
       const problem = status === 200 ? check.expect(body) : `status ${status}${reason ? ` (${reason})` : ""}`;
-      console.log(`${problem ? "FAIL" : "ok  "}  data  ${check.url}${problem ? `  — ${problem}` : ""}`);
-      if (problem) failures.push(`${check.url}: ${problem}`);
+      const who = check.as ? ` [as ${check.as}]` : "";
+      console.log(`${problem ? "FAIL" : "ok  "}  data  ${check.url}${who}${problem ? `  — ${problem}` : ""}`);
+      if (problem) failures.push(`${check.url}${who}: ${problem}`);
     }
   }
 } finally {
