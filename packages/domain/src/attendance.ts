@@ -17,7 +17,12 @@ export interface AttendanceSummary {
   longestAbsenceStreak: number;
 }
 
-export function summarizeAttendance(records: AttendanceRecordLike[]): AttendanceSummary {
+/**
+ * `sessionDates` is optional and only affects the streak calculation. Callers
+ * that know the section's timetable get a more accurate streak; callers that do
+ * not get exactly the previous behaviour.
+ */
+export function summarizeAttendance(records: AttendanceRecordLike[], sessionDates?: Date[]): AttendanceSummary {
   const counts = { present: 0, absent: 0, tardy: 0, excused: 0 };
 
   for (const record of records) {
@@ -40,7 +45,7 @@ export function summarizeAttendance(records: AttendanceRecordLike[]): Attendance
     issuePoints,
     attendanceRate,
     concernLevel,
-    longestAbsenceStreak: findLongestAbsenceStreak(records)
+    longestAbsenceStreak: findLongestAbsenceStreak(records, sessionDates)
   };
 }
 
