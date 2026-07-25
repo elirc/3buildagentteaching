@@ -1,0 +1,26 @@
+# Throwaway Postgres for the integration suite.
+#
+# Separate from docker-compose.yml on purpose: the integration tests TRUNCATE
+# every table between test files, and pointing them at your development database
+# would wipe the seed data you were in the middle of using. A different port and
+# a different volume make that mistake impossible rather than merely unlikely.
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: agentic-education-ops-postgres-test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: agentic_education_ops_test
+    ports:
+      - "${TEST_POSTGRES_PORT:-5443}:5432"
+    # No named volume. A test database that survives a restart is a test
+    # database that carries state between runs, which is the thing we are
+    # trying to avoid. tmpfs also makes it considerably faster.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agentic_education_ops_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
