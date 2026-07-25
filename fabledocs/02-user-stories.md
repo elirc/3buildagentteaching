@@ -48,7 +48,7 @@ starting, because three of these have already shipped and two left partials.
 | US-07 | Section-roster attendance entry | M | US-02 | ✅ shipped (#11) |
 | US-08 | Guardian portal | M | US-02 | ✅ shipped (#12), 1 criterion partial |
 | US-09 | Student portal: submit work and track grades | M | US-02 | ✅ shipped (#15) |
-| US-10 | Roster management and waitlist promotion | M | — |
+| US-10 | Roster management and waitlist promotion | M | — | ✅ shipped (#19) |
 | US-11 | Job producers, handlers, and a scheduler | L | US-01 |
 | US-12 | Notification and recommendation inbox | L | US-11 |
 | US-13 | Runtime structured logging | M | — |

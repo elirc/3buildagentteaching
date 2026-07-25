@@ -19,14 +19,15 @@ actually stands. Updated when a story merges.
 | — | [#14](https://github.com/elirc/3buildagentteaching/pull/14) | Smoke checks can run as a specific user, closing the verification gap US-05 and US-08 both shipped with |
 | US-09 | [#15](https://github.com/elirc/3buildagentteaching/pull/15) | `/my-courses` student portal; `canSubmitAssignment` and `determineSubmissionStatus` finally enforced |
 | — | [#16](https://github.com/elirc/3buildagentteaching/pull/16) | Staff record pages refused to students and guardians |
+| US-10 | [#19](https://github.com/elirc/3buildagentteaching/pull/19) | Waitlist promotion with write-time capacity re-check, bulk enrolment with per-student outcomes, capacity-reduction guard |
 
-**Test count: 28 → 91** (72 unit + 19 integration), plus a smoke pass over 28
+**Test count: 28 → 103** (79 unit + 24 integration), plus a smoke pass over 28
 routes and 14 data assertions — 10 of them role-scoped. CI green on all three
 jobs for every merge.
 
 ## Not started
 
-US-10 through US-20, exactly as written in `02-user-stories.md`. Nothing in
+US-11 through US-20, exactly as written in `02-user-stories.md`. Nothing in
 those stories has been superseded — the file is still the spec.
 
 ## How to verify your work now
@@ -75,6 +76,9 @@ up, it is a small piece of work, not a rewrite.
 - **US-07 criterion 8** — `historicalAverageIssuePoints` is still hardcoded to
   `2` for every target in `agent-run-service.ts`. It is an agent-input concern
   and belongs with US-17/US-19.
+- **The roster page has no smoke data assertion.** `section_algebra_a` is seeded
+  full with one waitlisted student — an ideal fixture for asserting the "Next"
+  badge and the seats-open banner. Obvious next increment.
 - **Untested writes** — `recordSectionAttendance` and
   `updateGuardianPreferences` have no integration tests. Their rules are
   unit-tested through the domain layer; the transactional paths are not.
@@ -145,6 +149,16 @@ the reported leak would have meant editing correct code to satisfy a broken test
 
 **A guard that refuses everyone is an outage, not a guard.** Every access check
 needs a positive test alongside the negative ones.
+
+**Re-check at write time, not render time.** A roster page that says "1 seat
+open" is stating something that was true when it rendered. Anything the UI
+computed in order to *offer* an action must be recomputed by the code that
+*performs* it — the gap between the two can be a lunch break.
+
+**Batch semantics are a product decision.** `bulkEnroll` uses one transaction
+per student on purpose, so one withdrawn student does not cost the operator
+eleven good ones. Ask of any batch: is this a business transaction, or a UI
+convenience? They want opposite implementations.
 
 **Seed data hides paging bugs.** With four students, `total: rows.length` and a
 real `count()` are indistinguishable. Any fixture set smaller than one page
