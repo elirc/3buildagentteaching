@@ -10,6 +10,7 @@ export type PermissionAction =
   | "section:create"
   | "section:update"
   | "enrollment:manage"
+  | "enrollment:promote"
   | "assignment:create"
   | "assignment:update"
   | "assignment:publish"
@@ -68,6 +69,7 @@ const platformManagerActions: PermissionAction[] = [
   "section:create",
   "section:update",
   "enrollment:manage",
+  "enrollment:promote",
   "assignment:create",
   "assignment:update",
   "assignment:publish",
