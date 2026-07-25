@@ -11,6 +11,7 @@ import { AppError } from "../errors";
 import { assertCan, type ActorContext } from "../context";
 import { createAuditEvent } from "../audit";
 import { jobService } from "./job-service";
+import { notifyService } from "./notify-service";
 
 export const assignmentService = {
   async createAssignment(actor: ActorContext, input: AssignmentInput) {
@@ -332,6 +333,22 @@ export const assignmentService = {
           idempotencyKey: `grade-recalc:${before.assignmentId}`,
           relatedAssignmentId: before.assignmentId,
           relatedStudentId: before.studentId
+        },
+        tx
+      );
+
+      // Tell the student and their guardians, in the same transaction as the
+      // grade. A notification about a grade that rolled back would be worse
+      // than no notification.
+      await notifyService.notify(
+        actor,
+        {
+          type: "GradePosted",
+          title: `${before.assignment.title} has been marked`,
+          body: `Score: ${input.score} out of ${before.assignment.pointsPossible}.`,
+          studentId: before.studentId,
+          candidates: await notifyService.familyCandidates(tx, before.studentId),
+          metadata: { submissionId: before.id }
         },
         tx
       );

@@ -3,6 +3,7 @@ import { prisma } from "@agentic-edu/db";
 import { academicService } from "../services/academic-service";
 import { assignmentService } from "../services/assignment-service";
 import { enrollmentService } from "../services/enrollment-service";
+import { jobService } from "../services/job-service";
 import { workerService } from "../services/worker-service";
 import { AppError } from "../errors";
 import { ADMIN, VIEWER, makeAssignment, makeRubric, makeSection, makeStudent, makeTeacher } from "./fixtures";
@@ -557,5 +558,141 @@ describe("academicService.updateSection capacity guard", () => {
 
     // The refused edit must leave capacity untouched.
     expect((await prisma.classSection.findUniqueOrThrow({ where: { id: section.id } })).capacity).toBe(3);
+  });
+});
+
+describe("jobService.enqueue", () => {
+  it("returns the existing job for an in-flight idempotency key", async () => {
+    // A double-clicked button, a retried request, and a producer firing twice
+    // are all normal. None should create a second job.
+    const first = await jobService.enqueue(ADMIN, {
+      type: "GuardianDigest",
+      payload: { studentId: "student_x" },
+      idempotencyKey: "digest:student_x:week_1"
+    });
+    const second = await jobService.enqueue(ADMIN, {
+      type: "GuardianDigest",
+      payload: { studentId: "student_x" },
+      idempotencyKey: "digest:student_x:week_1"
+    });
+
+    expect(second.id).toBe(first.id);
+    expect(await prisma.backgroundJob.count()).toBe(1);
+  });
+
+  it("allows re-enqueueing after the previous job finished", async () => {
+    // Otherwise the same weekly digest key would block that job forever, which
+    // is a far worse bug than an occasional duplicate.
+    const first = await jobService.enqueue(ADMIN, {
+      type: "GuardianDigest",
+      payload: { studentId: "student_y" },
+      idempotencyKey: "digest:student_y:week_1"
+    });
+    await prisma.backgroundJob.update({ where: { id: first.id }, data: { status: "Succeeded" } });
+
+    const second = await jobService.enqueue(ADMIN, {
+      type: "GuardianDigest",
+      payload: { studentId: "student_y" },
+      idempotencyKey: "digest:student_y:week_1"
+    });
+
+    expect(second.id).not.toBe(first.id);
+    expect(await prisma.backgroundJob.count()).toBe(2);
+  });
+});
+
+describe("workerService with real handlers", () => {
+  it("fails a job whose payload the schema rejects, with a useful message", async () => {
+    // Same shape as the seeded job_attendance_malformed. It now fails because
+    // the schema rejects it, not because a hardcoded matcher looked for
+    // "{bad-json".
+    await prisma.backgroundJob.create({
+      data: {
+        id: "job_bad_range",
+        type: "AttendanceSummary",
+        status: "Queued",
+        attempts: 0,
+        maxAttempts: 3,
+        payload: { studentId: "student_z", range: "{bad-json" }
+      }
+    });
+
+    const job = await workerService.runNextJob(ADMIN);
+    expect(job?.status).toBe("Failed");
+    expect(job?.errorMessage).toContain("Invalid payload");
+    expect(job?.errorMessage).toContain("range");
+  });
+
+  it("succeeds a job whose payload is valid", async () => {
+    await prisma.backgroundJob.create({
+      data: {
+        id: "job_good_range",
+        type: "AttendanceSummary",
+        status: "Queued",
+        attempts: 0,
+        maxAttempts: 3,
+        payload: { studentId: "student_z", range: "2026-09-01..2026-09-30" }
+      }
+    });
+
+    const job = await workerService.runNextJob(ADMIN);
+    expect(job?.status).toBe("Succeeded");
+    expect(job?.errorMessage).toBeNull();
+  });
+
+  it("records what the handler did in the audit event", async () => {
+    await prisma.backgroundJob.create({
+      data: {
+        id: "job_sync",
+        type: "EnrollmentSync",
+        status: "Queued",
+        attempts: 0,
+        maxAttempts: 3,
+        payload: { sectionId: "section_x" }
+      }
+    });
+    await workerService.runNextJob(ADMIN);
+
+    const audit = await prisma.auditEvent.findFirstOrThrow({
+      where: { action: "job.workerRan", entityId: "job_sync" }
+    });
+    expect((audit.metadata as { detail?: string }).detail).toContain("Synced");
+  });
+
+  it("runNextBatch stops when the queue empties instead of looping the limit", async () => {
+    for (const id of ["b1", "b2"]) {
+      await prisma.backgroundJob.create({
+        data: {
+          id,
+          type: "EnrollmentSync",
+          status: "Queued",
+          attempts: 0,
+          maxAttempts: 3,
+          payload: { sectionId: "section_x" }
+        }
+      });
+    }
+
+    const processed = await workerService.runNextBatch(ADMIN, 10);
+    expect(processed).toHaveLength(2);
+  });
+
+  it("releaseDueJobs makes a scheduled job runnable", async () => {
+    await prisma.backgroundJob.create({
+      data: {
+        id: "job_scheduled",
+        type: "EnrollmentSync",
+        status: "Queued",
+        attempts: 0,
+        maxAttempts: 3,
+        payload: { sectionId: "section_x" },
+        scheduledFor: new Date("2020-01-01"),
+        nextRunAt: new Date("2020-01-01")
+      }
+    });
+
+    const released = await workerService.releaseDueJobs(ADMIN);
+    expect(released).toBe(1);
+    expect((await workerService.runNextJob(ADMIN))?.id).toBe("job_scheduled");
   });
 });

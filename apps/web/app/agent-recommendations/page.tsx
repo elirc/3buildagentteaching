@@ -1,31 +1,40 @@
 import { Card, CardHeader, DataTable, PageHeader, Stat } from "@agentic-edu/ui";
-import { getAgentOperationsOverview } from "@agentic-edu/application";
+import { getRecommendationsForActor } from "@agentic-edu/application";
+import { getActorCapabilities } from "@/lib/capabilities";
 import { decideAgentRecommendation } from "@/lib/actions";
 import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { guardRoute } from "@/components/route-guard";
 
-export default async function AgentRecommendationsPage() {
+export default async function AgentRecommendationsPage({
+  searchParams
+}: {
+  searchParams?: Promise<{ all?: string }>;
+}) {
   const denied = await guardRoute("/agent-recommendations");
   if (denied) return denied;
 
-  const overview = await getAgentOperationsOverview();
+  const query = (await searchParams) ?? {};
+  const { actor } = await getActorCapabilities();
+  const { recommendations, showAll, canToggleAll } = await getRecommendationsForActor(actor, {
+    all: query.all === "1"
+  });
 
   return (
     <>
       <PageHeader title="Agent Recommendations" description="Human decision queue for deterministic agent suggestions." />
       <div className="ui-stat-grid">
-        <Stat label="Proposed" value={overview.recommendations.filter((item) => item.status === "Proposed").length} tone="warn" />
-        <Stat label="Approved" value={overview.recommendations.filter((item) => item.status === "Approved").length} tone="good" />
-        <Stat label="Completed" value={overview.recommendations.filter((item) => item.status === "Completed").length} />
+        <Stat label="Proposed" value={recommendations.filter((item) => item.status === "Proposed").length} tone="warn" />
+        <Stat label="Approved" value={recommendations.filter((item) => item.status === "Approved").length} tone="good" />
+        <Stat label="Completed" value={recommendations.filter((item) => item.status === "Completed").length} />
       </div>
       <Card>
         <CardHeader title="Recommendation Queue" />
         <DataTable>
           <thead><tr><th>Action</th><th>Owner</th><th>Priority</th><th>Status</th><th>Agent Run</th><th>Created</th><th>Decision</th></tr></thead>
           <tbody>
-            {overview.recommendations.map((recommendation) => (
+            {recommendations.map((recommendation) => (
               <tr key={recommendation.id}>
                 <td>{recommendation.action}<br /><small className="muted">{recommendation.rationale}</small></td>
                 <td>{recommendation.ownerRole}</td>

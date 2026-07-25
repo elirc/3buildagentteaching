@@ -72,7 +72,11 @@ export const agentOperationsService = {
         where: { id: recommendationId },
         data: {
           status,
-          rationale,
+          // Preserve the existing rationale when none is supplied. Passing the
+          // raw value would null out the agent's own explanation the moment
+          // someone approved without typing one — losing the reason the
+          // recommendation existed at the exact moment it was acted on.
+          rationale: rationale ?? before.rationale,
           approvedByUserId: status === "Approved" || status === "Completed" ? actor.id : before.approvedByUserId,
           decidedAt: new Date()
         }
