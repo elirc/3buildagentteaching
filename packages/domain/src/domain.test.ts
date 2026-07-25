@@ -7,9 +7,11 @@ import {
   calculateRubricScore,
   canAcquireJobLock,
   classifyPerformance,
+  canRecordAttendance,
   canTransitionApproval,
   decideEnrollment,
   determineSubmissionStatus,
+  findLongestAbsenceStreak,
   guardianRelationshipSchema,
   interventionStatusSchema,
   rankGradingQueue,
@@ -133,6 +135,104 @@ describe("attendance rules", () => {
     expect(summary.longestAbsenceStreak).toBe(3);
     expect(summary.concernLevel).toBe("Watch");
     expect(summary.issuePoints).toBe(3.5);
+  });
+
+  it("breaks an absence streak on a session the student attended", () => {
+    // Mon/Wed/Fri section. Absent Mon and Fri, present Wed — two separate
+    // single absences, not a streak of two.
+    const sessions = [new Date("2026-09-07"), new Date("2026-09-09"), new Date("2026-09-11")];
+    const records = [
+      { status: "Absent" as const, date: new Date("2026-09-07") },
+      { status: "Present" as const, date: new Date("2026-09-09") },
+      { status: "Absent" as const, date: new Date("2026-09-11") }
+    ];
+
+    expect(findLongestAbsenceStreak(records, sessions)).toBe(1);
+  });
+
+  it("treats consecutive sessions across a weekend as consecutive", () => {
+    // Friday then Monday IS back-to-back for a class that does not meet at the
+    // weekend. Counting calendar days here would report a gap that never
+    // existed.
+    const sessions = [new Date("2026-09-11"), new Date("2026-09-14")];
+    const records = [
+      { status: "Absent" as const, date: new Date("2026-09-11") },
+      { status: "Absent" as const, date: new Date("2026-09-14") }
+    ];
+
+    expect(findLongestAbsenceStreak(records, sessions)).toBe(2);
+  });
+
+  it("does not treat a missing record as an absence", () => {
+    // A session nobody took attendance for is unknown, not absent. Guessing
+    // turns a data-entry gap into an intervention.
+    const sessions = [new Date("2026-09-07"), new Date("2026-09-09"), new Date("2026-09-11")];
+    const records = [
+      { status: "Absent" as const, date: new Date("2026-09-07") },
+      { status: "Absent" as const, date: new Date("2026-09-11") }
+    ];
+
+    expect(findLongestAbsenceStreak(records, sessions)).toBe(1);
+  });
+});
+
+describe("attendance entry rules", () => {
+  const now = new Date("2026-09-10T12:00:00Z");
+  const termRange = { startsAt: new Date("2026-08-17"), endsAt: new Date("2026-12-18") };
+
+  it("allows an enrolled student in an active section on a term date", () => {
+    expect(
+      canRecordAttendance({
+        enrollmentStatus: "Enrolled",
+        sectionStatus: "Active",
+        date: new Date("2026-09-09"),
+        termRange,
+        now
+      }).allowed
+    ).toBe(true);
+  });
+
+  it("refuses a student who is not enrolled in this section", () => {
+    // The single-record form offered every student against every section, so a
+    // mis-click produced a row that quietly skewed someone's attendance rate.
+    const decision = canRecordAttendance({
+      enrollmentStatus: "Dropped",
+      sectionStatus: "Active",
+      date: new Date("2026-09-09"),
+      termRange,
+      now
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toContain("actively enrolled");
+  });
+
+  it("refuses a date outside the section's term", () => {
+    expect(
+      canRecordAttendance({
+        enrollmentStatus: "Enrolled",
+        sectionStatus: "Active",
+        date: new Date("2026-07-04"),
+        termRange,
+        now
+      }).allowed
+    ).toBe(false);
+  });
+
+  it("allows tomorrow but refuses a typo'd future date", () => {
+    // A day of slack covers a known trip; a mistyped year does not.
+    expect(
+      canRecordAttendance({ enrollmentStatus: "Enrolled", sectionStatus: "Active", date: new Date("2026-09-11T09:00:00Z"), now }).allowed
+    ).toBe(true);
+    expect(
+      canRecordAttendance({ enrollmentStatus: "Enrolled", sectionStatus: "Active", date: new Date("2027-09-10"), now }).allowed
+    ).toBe(false);
+  });
+
+  it("refuses a cancelled section", () => {
+    expect(
+      canRecordAttendance({ enrollmentStatus: "Enrolled", sectionStatus: "Cancelled", date: new Date("2026-09-09"), now }).allowed
+    ).toBe(false);
   });
 });
 

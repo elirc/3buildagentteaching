@@ -53,7 +53,7 @@ export default async function SectionDetailPage({ params }: { params: Promise<{ 
       <div className="split" style={{ marginTop: "var(--space-4)" }}>
         <div className="stack">
           <Card>
-            <CardHeader title="Roster" actions={<a className="ui-button ui-button--secondary" href={`/sections/${section.id}/roster`}>Manage roster</a>} />
+            <CardHeader title="Roster" actions={<><a className="ui-button ui-button--secondary" href={`/sections/${section.id}/roster`}>Manage roster</a> <a className="ui-button ui-button--primary" href={`/sections/${section.id}/attendance`}>Take attendance</a></>} />
             <DataTable>
               <thead><tr><th>Student</th><th>Status</th><th>Average</th></tr></thead>
               <tbody>

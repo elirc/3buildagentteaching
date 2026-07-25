@@ -63,6 +63,18 @@ const DATA_CHECKS = [
     expect: (html) => (countStudentRows(html) === 4 ? null : `page past end should clamp, got ${countStudentRows(html)}`)
   },
   {
+    // The roster attendance sheet renders one row per enrolled student.
+    // section_algebra_a has 3 enrolled (noah is waitlisted, so excluded).
+    url: "/sections/section_algebra_a/attendance",
+    expect: (html) => {
+      // Match the field name only. React streams part of the markup inside a
+      // JSON payload where quotes are escaped as \", so anchoring on `name="`
+      // matches the server-rendered half and misses the streamed half.
+      const n = new Set([...html.matchAll(/status_(student_[a-z]+)/g)].map((m) => m[1])).size;
+      return n === 3 ? null : `expected 3 register rows, got ${n}`;
+    }
+  },
+  {
     url: "/teachers?q=patel",
     expect: (html) => {
       const n = new Set([...html.matchAll(/\/teachers\/(teacher_[a-z]+)/g)].map((m) => m[1])).size;
