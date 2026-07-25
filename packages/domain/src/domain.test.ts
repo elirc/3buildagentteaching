@@ -80,6 +80,44 @@ describe("grade calculations", () => {
     expect(summary.performanceBand).toBe("AtRisk");
     expect(classifyPerformance(88)).toBe("Good");
   });
+
+  it("counts a late, ungraded submission in the denominator", () => {
+    // The bug: this used to contribute nothing at all, so the assignment
+    // vanished from the average rather than lowering it. A student with one
+    // good score and a pile of ungraded late work looked excellent.
+    const summary = calculateGradeSummary([
+      { score: 18, pointsPossible: 20, status: "Graded", gradedAt: new Date("2026-01-01") },
+      { score: null, pointsPossible: 20, status: "Late", gradedAt: null }
+    ]);
+
+    expect(summary.lateCount).toBe(1);
+    expect(summary.average).toBe(45); // 18 / 40, not 18 / 20
+  });
+
+  it("does not penalise work the teacher simply has not reached", () => {
+    // Submitted-and-ungraded is the teacher's backlog, not the student's fault.
+    // Counting it would make every student's average drop whenever grading
+    // fell behind, which is both unfair and useless as a signal.
+    const summary = calculateGradeSummary([
+      { score: 18, pointsPossible: 20, status: "Graded", gradedAt: new Date("2026-01-01") },
+      { score: null, pointsPossible: 20, status: "Submitted", gradedAt: null },
+      { score: null, pointsPossible: 20, status: "NotStarted", gradedAt: null }
+    ]);
+
+    expect(summary.average).toBe(90);
+  });
+
+  it("keeps a graded late submission scored, not double-counted", () => {
+    // Once graded, a Late row takes the normal path. Regression guard for the
+    // fix above, which adds an early `continue`.
+    const summary = calculateGradeSummary([
+      { score: 15, pointsPossible: 20, status: "Late", gradedAt: new Date("2026-01-02") }
+    ]);
+
+    expect(summary.lateCount).toBe(1);
+    expect(summary.gradedCount).toBe(1);
+    expect(summary.average).toBe(75);
+  });
 });
 
 describe("attendance rules", () => {
