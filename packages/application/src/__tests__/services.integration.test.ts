@@ -4,7 +4,7 @@ import { assignmentService } from "../services/assignment-service";
 import { enrollmentService } from "../services/enrollment-service";
 import { workerService } from "../services/worker-service";
 import { AppError } from "../errors";
-import { ADMIN, VIEWER, makeAssignment, makeSection, makeStudent, makeTeacher } from "./fixtures";
+import { ADMIN, VIEWER, makeAssignment, makeRubric, makeSection, makeStudent, makeTeacher } from "./fixtures";
 
 /**
  * These cover the rules that only exist once a database is involved: unique
@@ -236,5 +236,117 @@ describe("workerService.runNextJob", () => {
     // An empty queue is not an error. runNextWorkerJob depends on this to tell
     // "nothing to do" apart from "something broke".
     expect(await workerService.runNextJob(ADMIN)).toBeNull();
+  });
+});
+
+describe("assignmentService.gradeSubmissionWithRubric", () => {
+  async function setupRubricSubmission() {
+    const teacher = await makeTeacher();
+    const section = await makeSection(teacher.id);
+    const student = await makeStudent();
+    const assignment = await makeAssignment(section.id, teacher.id, 50);
+    const rubric = await makeRubric(assignment.id, teacher.id, [
+      { title: "Model Accuracy", points: 20 },
+      { title: "Reasoning", points: 15 },
+      { title: "Completeness", points: 10 },
+      { title: "Reflection", points: 5 }
+    ]);
+    const submission = await prisma.submission.create({
+      data: { assignmentId: assignment.id, studentId: student.id, status: "Submitted", submittedAt: new Date() }
+    });
+    return { teacher, submission, rubric };
+  }
+
+  it("derives the total from the criteria and marks the submission Graded", async () => {
+    const { teacher, submission, rubric } = await setupRubricSubmission();
+
+    const result = await assignmentService.gradeSubmissionWithRubric(ADMIN, {
+      submissionId: submission.id,
+      gradedByTeacherId: teacher.id,
+      feedback: "Strong model.",
+      scores: rubric.criteria.map((criterion) => ({ criterionId: criterion.id, score: criterion.pointsPossible - 1 }))
+    });
+
+    // 19 + 14 + 9 + 4
+    expect(result.summary.totalScore).toBe(46);
+    expect(result.needsReview).toBe(false);
+    expect(result.submission.score).toBe(46);
+    expect(result.submission.status).toBe("Graded");
+    expect(await prisma.submissionCriterionScore.count({ where: { submissionId: submission.id } })).toBe(4);
+  });
+
+  it("keeps a partially scored submission out of Graded", async () => {
+    // Teachers score a stack in passes. A half-scored submission must stay in
+    // the grading queue rather than looking finished with a low mark.
+    const { teacher, submission, rubric } = await setupRubricSubmission();
+
+    const result = await assignmentService.gradeSubmissionWithRubric(ADMIN, {
+      submissionId: submission.id,
+      gradedByTeacherId: teacher.id,
+      feedback: "Partial.",
+      scores: [{ criterionId: rubric.criteria[0]!.id, score: 18 }]
+    });
+
+    expect(result.needsReview).toBe(true);
+    expect(result.submission.status).toBe("Submitted");
+    expect(result.submission.gradedAt).toBeNull();
+    expect(result.submission.score).toBe(18);
+  });
+
+  it("re-saving updates rather than duplicating criterion rows", async () => {
+    // Guards the @@unique([submissionId, criterionId]) upsert path — the
+    // difference between editing a grade and silently creating a second one.
+    const { teacher, submission, rubric } = await setupRubricSubmission();
+    const first = rubric.criteria[0]!;
+
+    for (const score of [12, 17]) {
+      await assignmentService.gradeSubmissionWithRubric(ADMIN, {
+        submissionId: submission.id,
+        gradedByTeacherId: teacher.id,
+        feedback: "",
+        scores: [{ criterionId: first.id, score }]
+      });
+    }
+
+    const rows = await prisma.submissionCriterionScore.findMany({ where: { submissionId: submission.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.score).toBe(17);
+  });
+
+  it("rejects a score above its criterion maximum and writes nothing", async () => {
+    const { teacher, submission, rubric } = await setupRubricSubmission();
+
+    await expect(
+      assignmentService.gradeSubmissionWithRubric(ADMIN, {
+        submissionId: submission.id,
+        gradedByTeacherId: teacher.id,
+        feedback: "",
+        scores: [{ criterionId: rubric.criteria[0]!.id, score: 999 }]
+      })
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+
+    expect(await prisma.submissionCriterionScore.count()).toBe(0);
+    expect(await prisma.auditEvent.count()).toBe(0);
+  });
+
+  it("refuses a criterion belonging to a different rubric", async () => {
+    // A stale form or a tampered request could otherwise write orphan rows
+    // that no rubric total would ever include.
+    const { teacher, submission } = await setupRubricSubmission();
+    const otherTeacher = await makeTeacher();
+    const otherSection = await makeSection(otherTeacher.id);
+    const otherAssignment = await makeAssignment(otherSection.id, otherTeacher.id, 20);
+    const otherRubric = await makeRubric(otherAssignment.id, otherTeacher.id, [{ title: "Elsewhere", points: 10 }]);
+
+    await expect(
+      assignmentService.gradeSubmissionWithRubric(ADMIN, {
+        submissionId: submission.id,
+        gradedByTeacherId: teacher.id,
+        feedback: "",
+        scores: [{ criterionId: otherRubric.criteria[0]!.id, score: 5 }]
+      })
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+
+    expect(await prisma.submissionCriterionScore.count()).toBe(0);
   });
 });

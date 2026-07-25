@@ -233,6 +233,45 @@ export async function gradeSubmission(_previous: FormState, formData: FormData):
   });
 }
 
+export async function gradeSubmissionWithRubric(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const submissionId = stringValue(formData, "submissionId");
+
+    /*
+     * Criterion inputs are named `criterion_<id>` and `criterionFeedback_<id>`
+     * so the form can carry a variable number of them without an index that
+     * has to stay in sync with the rendered order.
+     *
+     * A blank score means "not scored yet", not zero. Coercing blanks to 0
+     * would silently award nothing for criteria the teacher simply had not
+     * reached, and the partial-save behaviour depends on telling those apart.
+     */
+    const scores: Array<{ criterionId: string; score: number; feedback: string | null }> = [];
+    for (const [key, value] of formData.entries()) {
+      if (!key.startsWith("criterion_")) continue;
+      const raw = String(value).trim();
+      if (raw.length === 0) continue;
+      const criterionId = key.slice("criterion_".length);
+      scores.push({
+        criterionId,
+        score: Number(raw),
+        feedback: optionalString(formData, `criterionFeedback_${criterionId}`)
+      });
+    }
+
+    const result = await assignmentService.gradeSubmissionWithRubric(actor, {
+      submissionId,
+      gradedByTeacherId: stringValue(formData, "gradedByTeacherId"),
+      feedback: stringValue(formData, "feedback"),
+      scores
+    });
+    revalidatePath(`/submissions/${submissionId}`);
+    revalidatePath("/my-work");
+    return result;
+  });
+}
+
 export async function createSubmission(_previous: FormState, formData: FormData): Promise<FormState> {
   const result = await runAction(async () => {
     const actor = await getCurrentActor();

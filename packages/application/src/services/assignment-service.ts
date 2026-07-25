@@ -1,6 +1,6 @@
 import { prisma } from "@agentic-edu/db";
 import type { AssignmentInput } from "@agentic-edu/domain";
-import { validateScore } from "@agentic-edu/domain";
+import { calculateRubricScore, rubricRequiresTeacherReview, validateScore } from "@agentic-edu/domain";
 import { AppError } from "../errors";
 import { assertCan, type ActorContext } from "../context";
 import { createAuditEvent } from "../audit";
@@ -118,6 +118,118 @@ export const assignmentService = {
         after: submission
       });
       return submission;
+    });
+  },
+
+  /**
+   * Grades a submission against its assignment's rubric.
+   *
+   * The total is *derived* from the criterion scores, never supplied by the
+   * caller. A rubric whose parts do not add up to its whole is not a rubric —
+   * it is two numbers that will eventually disagree, and the disagreement will
+   * surface as a student asking why their criterion scores do not match their
+   * grade.
+   *
+   * Partial scoring is allowed on purpose. Teachers score a stack of work in
+   * passes, and forcing all-or-nothing means either losing progress or entering
+   * fake zeros. An incompletely-scored submission stays `Submitted` rather than
+   * becoming `Graded`, so it remains in the US-05 queue until it is genuinely
+   * finished.
+   */
+  async gradeSubmissionWithRubric(
+    actor: ActorContext,
+    input: {
+      submissionId: string;
+      gradedByTeacherId: string;
+      feedback: string;
+      scores: Array<{ criterionId: string; score: number; feedback?: string | null }>;
+    }
+  ) {
+    assertCan(actor, "submission:grade", { teacherId: input.gradedByTeacherId });
+
+    return prisma.$transaction(async (tx) => {
+      const before = await tx.submission.findUniqueOrThrow({
+        where: { id: input.submissionId },
+        include: { assignment: { include: { rubric: { include: { criteria: true } } } }, criterionScores: true }
+      });
+
+      const rubric = before.assignment.rubric;
+      if (!rubric) {
+        throw new AppError("CONFLICT", "This assignment has no rubric. Use the plain score field instead.", {
+          submissionId: input.submissionId
+        });
+      }
+
+      // Reject scores for criteria that do not belong to this rubric before
+      // doing anything else — otherwise a stale form could write orphan rows.
+      const criterionIds = new Set(rubric.criteria.map((criterion) => criterion.id));
+      const unknown = input.scores.find((score) => !criterionIds.has(score.criterionId));
+      if (unknown) {
+        throw new AppError("VALIDATION_ERROR", "That criterion does not belong to this assignment's rubric.", {
+          criterionId: unknown.criterionId
+        });
+      }
+
+      const summary = calculateRubricScore(
+        rubric.criteria.map((criterion) => ({
+          id: criterion.id,
+          title: criterion.title,
+          pointsPossible: criterion.pointsPossible
+        })),
+        input.scores.map((score) => ({ criterionId: score.criterionId, score: score.score }))
+      );
+
+      if (summary.invalidScores.length > 0) {
+        throw new AppError("VALIDATION_ERROR", summary.invalidScores[0]!.reason, {
+          invalidScores: summary.invalidScores
+        });
+      }
+
+      for (const score of input.scores) {
+        await tx.submissionCriterionScore.upsert({
+          where: {
+            submissionId_criterionId: { submissionId: input.submissionId, criterionId: score.criterionId }
+          },
+          create: {
+            submissionId: input.submissionId,
+            criterionId: score.criterionId,
+            score: score.score,
+            feedback: score.feedback ?? null
+          },
+          update: { score: score.score, feedback: score.feedback ?? null }
+        });
+      }
+
+      const needsReview = rubricRequiresTeacherReview(summary);
+      const submission = await tx.submission.update({
+        where: { id: input.submissionId },
+        data: {
+          score: summary.totalScore,
+          feedback: input.feedback,
+          // Incomplete scoring keeps the submission in the grading queue.
+          status: needsReview ? before.status : "Graded",
+          gradedAt: needsReview ? before.gradedAt : new Date(),
+          gradedByTeacherId: input.gradedByTeacherId
+        }
+      });
+
+      await createAuditEvent(tx, {
+        actorUserId: actor.id,
+        action: "submission.graded",
+        entityType: "Submission",
+        entityId: input.submissionId,
+        before,
+        after: {
+          ...submission,
+          // The per-criterion breakdown belongs in the audit trail: "why is this
+          // 46 out of 50" is exactly the question an audit log should answer.
+          criterionScores: input.scores,
+          rubricSummary: summary
+        },
+        metadata: { rubricId: rubric.id, scoredCriteria: input.scores.length, totalCriteria: rubric.criteria.length }
+      });
+
+      return { submission, summary, needsReview };
     });
   },
 

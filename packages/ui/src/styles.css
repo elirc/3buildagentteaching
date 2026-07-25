@@ -347,3 +347,15 @@ button {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* One rubric criterion: score input plus its feedback box. The left border
+   groups them visually so a long rubric reads as a list of criteria rather
+   than an undifferentiated wall of fields. */
+.ui-criterion {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-left: 2px solid var(--color-border);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-sm, 4px);
+}

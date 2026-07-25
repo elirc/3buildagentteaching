@@ -82,3 +82,22 @@ export async function makeAssignment(classSectionId: string, teacherId: string, 
 
 export const ADMIN = { id: "user_admin", role: "Admin" as const };
 export const VIEWER = { id: "user_viewer", role: "Viewer" as const };
+
+export async function makeRubric(assignmentId: string, teacherId: string, criteria: Array<{ title: string; points: number }>) {
+  return prisma.rubric.create({
+    data: {
+      assignmentId,
+      title: "Project Rubric",
+      createdByTeacherId: teacherId,
+      criteria: {
+        create: criteria.map((criterion, index) => ({
+          title: criterion.title,
+          description: `${criterion.title} criterion`,
+          pointsPossible: criterion.points,
+          sortOrder: index + 1
+        }))
+      }
+    },
+    include: { criteria: { orderBy: { sortOrder: "asc" } } }
+  });
+}

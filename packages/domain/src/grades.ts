@@ -45,6 +45,8 @@ export function calculateGradeSummary(scores: ScoreRecord[]): GradeSummary {
   for (const score of scores) {
     if (score.status === "Missing") {
       missingCount += 1;
+      // Missing work counts against the average: nothing earned, full points in
+      // the denominator.
       possiblePoints += score.pointsPossible;
       continue;
     }
@@ -57,6 +59,31 @@ export function calculateGradeSummary(scores: ScoreRecord[]): GradeSummary {
       earnedPoints += score.score;
       possiblePoints += score.pointsPossible;
       gradedCount += 1;
+      continue;
+    }
+
+    /*
+     * Late, handed in, still ungraded.
+     *
+     * This used to fall off the end of the loop and contribute nothing at all —
+     * not to earnedPoints, not to possiblePoints — so the assignment silently
+     * vanished from the average instead of affecting it. A student with one
+     * good score and three ungraded late submissions showed the good score as
+     * their average.
+     *
+     * It is counted like Missing: full points in the denominator, nothing
+     * earned. That is the honest reading of "not yet graded" — the student has
+     * no credit for it *yet*. The number corrects itself the moment a teacher
+     * grades the work, which is exactly the nudge the grading queue in US-05 is
+     * built to act on.
+     *
+     * NotStarted and Submitted-but-ungraded are deliberately NOT counted. Work
+     * that is not yet due has not been failed, and penalising a student for an
+     * assignment the teacher has simply not reached would be worse than the bug
+     * this replaces.
+     */
+    if (score.status === "Late") {
+      possiblePoints += score.pointsPossible;
     }
   }
 
