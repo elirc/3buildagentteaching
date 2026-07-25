@@ -75,13 +75,27 @@ function countStudentRows(html) {
   return new Set([...html.matchAll(/\/students\/(student_[a-z]+)/g)].map((m) => m[1])).size;
 }
 
+/**
+ * Fetch that never throws.
+ *
+ * A smoke test whose own HTTP client can crash is worse than useless: the run
+ * dies on the first slow route and reports nothing about the other twenty-three.
+ * A timeout or a refused connection is a *result* here — status 0 with a reason
+ * — not an exception for the caller to handle.
+ *
+ * (This function originally used try/finally without a catch. The first slow
+ * route aborted, the rejection escaped, and node exited with an uncaught
+ * DOMException and no report at all.)
+ */
 async function get(path) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     const res = await fetch(BASE + path, { signal: controller.signal, redirect: "manual" });
-    const body = await res.text();
-    return { status: res.status, body };
+    return { status: res.status, body: await res.text() };
+  } catch (error) {
+    const reason = error?.name === "AbortError" ? `timed out after ${REQUEST_TIMEOUT_MS}ms` : String(error?.message ?? error);
+    return { status: 0, body: "", reason };
   } finally {
     clearTimeout(timer);
   }
@@ -114,18 +128,18 @@ try {
     failures.push("boot");
   } else {
     for (const route of ROUTES) {
-      const { status, body } = await get(route);
+      const { status, body, reason } = await get(route);
       // A Next error page still returns 200 in dev, so the status alone is not
       // enough — the digest marker is what distinguishes a rendered error.
       const errored = /"digest":"\d/.test(body) || /Application error: a server-side exception/.test(body);
       const ok = status === 200 && !errored;
-      console.log(`${ok ? "ok  " : "FAIL"}  ${status}  ${route}`);
-      if (!ok) failures.push(`${route} -> ${status}${errored ? " (server exception)" : ""}`);
+      console.log(`${ok ? "ok  " : "FAIL"}  ${status}  ${route}${reason ? `  (${reason})` : ""}`);
+      if (!ok) failures.push(`${route} -> ${status}${reason ? ` ${reason}` : ""}${errored ? " (server exception)" : ""}`);
     }
 
     for (const check of DATA_CHECKS) {
-      const { status, body } = await get(check.url);
-      const problem = status === 200 ? check.expect(body) : `status ${status}`;
+      const { status, body, reason } = await get(check.url);
+      const problem = status === 200 ? check.expect(body) : `status ${status}${reason ? ` (${reason})` : ""}`;
       console.log(`${problem ? "FAIL" : "ok  "}  data  ${check.url}${problem ? `  — ${problem}` : ""}`);
       if (problem) failures.push(`${check.url}: ${problem}`);
     }
