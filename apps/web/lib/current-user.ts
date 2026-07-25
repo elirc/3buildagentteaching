@@ -22,16 +22,23 @@ export async function getCurrentActor(): Promise<ActorContext> {
   if (!user) {
     throw new Error("No development user is available.");
   }
-  const [teacher, student, advisedStudents] = await Promise.all([
+  const [teacher, student, advisedStudents, guardianLinks] = await Promise.all([
     prisma.teacher.findUnique({ where: { userId: user.id }, select: { id: true } }),
     prisma.student.findUnique({ where: { userId: user.id }, select: { id: true } }),
-    prisma.student.findMany({ where: { advisorId: user.id }, select: { id: true } })
+    prisma.student.findMany({ where: { advisorId: user.id }, select: { id: true } }),
+    // Two hops: User -> Guardian -> StudentGuardian. A Guardian profile is not
+    // required to have a user account, so this is empty for most actors.
+    prisma.studentGuardian.findMany({
+      where: { guardian: { userId: user.id } },
+      select: { studentId: true }
+    })
   ]);
   return {
     id: user.id,
     role: user.role,
     teacherId: teacher?.id ?? null,
     studentId: student?.id ?? null,
-    advisedStudentIds: advisedStudents.map((item) => item.id)
+    advisedStudentIds: advisedStudents.map((item) => item.id),
+    guardianStudentIds: guardianLinks.map((item) => item.studentId)
   };
 }

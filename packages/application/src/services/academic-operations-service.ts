@@ -201,7 +201,17 @@ export const academicOperationsService = {
   },
 
   async markNotificationRead(actor: ActorContext, notificationId: string) {
-    assertCan(actor, "notification:manage");
+    // Read the recipient before deciding, because "may I mark this read" cannot
+    // be answered without knowing whose it is. Ownership wins: anyone may mark
+    // their own. Only if it belongs to someone else is the broader
+    // notification:manage required.
+    const target = await prisma.notification.findUniqueOrThrow({ where: { id: notificationId } });
+    if (target.userId === actor.id) {
+      assertCan(actor, "notification:readOwn", { recipientUserId: target.userId });
+    } else {
+      assertCan(actor, "notification:manage");
+    }
+
     return prisma.$transaction(async (tx) => {
       const before = await tx.notification.findUniqueOrThrow({ where: { id: notificationId } });
       const notification = await tx.notification.update({
@@ -220,6 +230,40 @@ export const academicOperationsService = {
         after: notification
       });
       return notification;
+    });
+  },
+
+  /**
+   * A guardian changing their own contact preferences.
+   *
+   * Only receivesDigest is writable here. isPrimary and emergencyContact are
+   * staff-managed: a parent quietly making themselves the emergency contact, or
+   * demoting the other parent, is a safeguarding problem rather than a
+   * preference.
+   */
+  async updateGuardianPreferences(
+    actor: ActorContext,
+    input: { studentId: string; receivesDigest: boolean }
+  ) {
+    assertCan(actor, "guardian:updateOwnPreferences", { studentId: input.studentId });
+
+    return prisma.$transaction(async (tx) => {
+      const link = await tx.studentGuardian.findFirstOrThrow({
+        where: { studentId: input.studentId, guardian: { userId: actor.id } }
+      });
+      const updated = await tx.studentGuardian.update({
+        where: { id: link.id },
+        data: { receivesDigest: input.receivesDigest }
+      });
+      await createAuditEvent(tx, {
+        actorUserId: actor.id,
+        action: "studentGuardian.preferencesUpdated",
+        entityType: "StudentGuardian",
+        entityId: link.id,
+        before: link,
+        after: updated
+      });
+      return updated;
     });
   },
 

@@ -561,6 +561,20 @@ export async function createRubric(_previous: FormState, formData: FormData): Pr
   });
 }
 
+export async function updateGuardianPreferences(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const studentId = stringValue(formData, "studentId");
+    const link = await academicOperationsService.updateGuardianPreferences(actor, {
+      studentId,
+      // An unchecked checkbox sends nothing at all, so absence means false.
+      receivesDigest: formData.get("receivesDigest") === "on"
+    });
+    revalidatePath("/family");
+    return link;
+  });
+}
+
 export async function markNotificationRead(_previous: FormState, formData: FormData): Promise<FormState> {
   return runAction(async () => {
     const actor = await getCurrentActor();

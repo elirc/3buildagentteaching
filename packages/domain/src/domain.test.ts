@@ -436,22 +436,58 @@ describe("role permissions", () => {
     expect(canPerform({ id: "u1", role: "Teacher", teacherId: "teacher_1" }, "student:create")).toBe(false);
   });
 
-  it("grants Guardian and Viewer nothing at all (pinned before US-08 changes it)", () => {
-    // These two roles fall through canPerform to `return false`. That is
-    // intentional for Viewer — a read-only observer — and a gap for Guardian,
-    // who has a profile table, a digest opt-in flag and notifications addressed
-    // to them, but cannot even mark one read.
-    //
-    // This test pins today's behaviour so US-08 has to change it *deliberately*.
-    // When the Guardian branch lands, this test should fail and be rewritten —
-    // that failure is the signal that the permission surface moved.
-    const guardian = { id: "user_guardian", role: "Guardian" } as const;
+  it("grants a Viewer nothing — read-only means read-only", () => {
     const viewer = { id: "user_viewer", role: "Viewer" } as const;
-
     for (const action of ["notification:manage", "submission:create", "supportNote:create", "agent:run"] as const) {
-      expect(canPerform(guardian, action)).toBe(false);
       expect(canPerform(viewer, action)).toBe(false);
     }
+  });
+
+  it("lets a Guardian see their own children and nobody else's", () => {
+    // Replaces the US-02 characterisation test, which asserted that Guardian
+    // could do nothing at all. That test existed to force this change to be
+    // deliberate rather than accidental; it has done its job.
+    const guardian = {
+      id: "user_guardian",
+      role: "Guardian",
+      guardianStudentIds: ["student_maya"]
+    } as const;
+
+    expect(canPerform(guardian, "guardian:viewOwnStudents", { studentId: "student_maya" })).toBe(true);
+    expect(canPerform(guardian, "guardian:updateOwnPreferences", { studentId: "student_maya" })).toBe(true);
+
+    expect(canPerform(guardian, "guardian:viewOwnStudents", { studentId: "student_liam" })).toBe(false);
+  });
+
+  it("does not let a Guardian near staff workflows", () => {
+    // The surface is deliberately tiny: look at your child, change how you are
+    // contacted. Everything else stays refused.
+    const guardian = { id: "user_guardian", role: "Guardian", guardianStudentIds: ["student_maya"] } as const;
+
+    for (const action of [
+      "supportNote:create",
+      "intervention:create",
+      "agent:run",
+      "submission:grade",
+      "notification:manage"
+    ] as const) {
+      expect(canPerform(guardian, action, { studentId: "student_maya" })).toBe(false);
+    }
+  });
+
+  it("lets anyone mark their own notification read, and nobody else's", () => {
+    // notification:readOwn is about ownership, not role — which is why it is
+    // checked before the Admin short-circuit. An Admin needing to touch someone
+    // else's notification uses notification:manage instead.
+    const guardian = { id: "user_guardian", role: "Guardian" } as const;
+    const student = { id: "user_student", role: "Student" } as const;
+    const admin = { id: "user_admin", role: "Admin" } as const;
+
+    expect(canPerform(guardian, "notification:readOwn", { recipientUserId: "user_guardian" })).toBe(true);
+    expect(canPerform(student, "notification:readOwn", { recipientUserId: "user_student" })).toBe(true);
+
+    expect(canPerform(guardian, "notification:readOwn", { recipientUserId: "user_student" })).toBe(false);
+    expect(canPerform(admin, "notification:readOwn", { recipientUserId: "user_student" })).toBe(false);
   });
 
   it("limits students to their own submissions", () => {
