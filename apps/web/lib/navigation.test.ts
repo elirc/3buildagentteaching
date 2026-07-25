@@ -15,7 +15,7 @@ describe("navigation", () => {
     // Portals are the exception to "Admin sees everything", and naming them
     // here means adding another one has to be a deliberate decision rather
     // than a silently failing test.
-    const portals = ["/family"];
+    const portals = ["/family", "/my-courses"];
     const adminHrefs = navItemsForRole("Admin").map((item) => item.href);
 
     expect(adminHrefs).toHaveLength(NAV_ITEMS.length - portals.length);
@@ -41,15 +41,18 @@ describe("navigation", () => {
     expect(hrefs).toContain("/logs");
   });
 
-  it("gives a Guardian their own scoped destination", () => {
-    // US-08 shipped /family, which IS scoped to their children.
+  it("gives Guardians and Students their own scoped destinations", () => {
+    // US-08 shipped /family and US-09 shipped /my-courses. Both are scoped to
+    // the acting user, which is why neither belongs in a staff sidebar.
     expect(navItemsForRole("Guardian").map((item) => item.href)).toContain("/family");
+    expect(navItemsForRole("Student").map((item) => item.href)).toContain("/my-courses");
+
     expect(navItemsForRole("Teacher").map((item) => item.href)).not.toContain("/family");
+    expect(navItemsForRole("Teacher").map((item) => item.href)).not.toContain("/my-courses");
   });
 
   it("does not show a Student or Guardian anyone else's data", () => {
-    // /my-courses (US-09) does not exist yet, so Student stays short. Neither
-    // role gets a school-wide list page.
+    // Both roles now have a scoped portal; neither gets a school-wide list page.
     for (const role of ["Student", "Guardian"] as const) {
       const hrefs = navItemsForRole(role).map((item) => item.href);
       expect(hrefs).not.toContain("/students");
