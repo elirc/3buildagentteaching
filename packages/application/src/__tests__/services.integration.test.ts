@@ -350,3 +350,95 @@ describe("assignmentService.gradeSubmissionWithRubric", () => {
     expect(await prisma.submissionCriterionScore.count()).toBe(0);
   });
 });
+
+describe("assignmentService.submitAssignment", () => {
+  async function setup(status: "Draft" | "Published" | "Closed") {
+    const teacher = await makeTeacher();
+    const section = await makeSection(teacher.id);
+    const student = await makeStudent();
+    const assignment = await prisma.assignment.create({
+      data: {
+        classSectionId: section.id,
+        title: "Essay",
+        description: "Write one.",
+        type: "Homework",
+        status,
+        dueDate: new Date("2026-05-01T00:00:00.000Z"),
+        pointsPossible: 20,
+        createdByTeacherId: teacher.id
+      }
+    });
+    return { student, assignment };
+  }
+
+  it("refuses a Draft assignment the student was never meant to see", async () => {
+    // canSubmitAssignment existed and was unit-tested from the first commit and
+    // was called by nothing, so this silently worked before US-09.
+    const { student, assignment } = await setup("Draft");
+
+    await expect(
+      assignmentService.submitAssignment(ADMIN, {
+        assignmentId: assignment.id,
+        studentId: student.id,
+        contentText: "here",
+        attachmentUrl: null
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    expect(await prisma.submission.count()).toBe(0);
+  });
+
+  it("refuses a Closed assignment", async () => {
+    const { student, assignment } = await setup("Closed");
+
+    await expect(
+      assignmentService.submitAssignment(ADMIN, {
+        assignmentId: assignment.id,
+        studentId: student.id,
+        contentText: "here",
+        attachmentUrl: null
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("marks on-time and late submissions from an injected clock", async () => {
+    // `now` is a parameter so the late boundary is assertable. Reading the wall
+    // clock here would make this test pass or fail depending on the date.
+    const onTime = await setup("Published");
+    const early = await assignmentService.submitAssignment(ADMIN, {
+      assignmentId: onTime.assignment.id,
+      studentId: onTime.student.id,
+      contentText: "early",
+      attachmentUrl: null,
+      now: new Date("2026-04-30T09:00:00.000Z")
+    });
+    expect(early.status).toBe("Submitted");
+
+    const overdue = await setup("Published");
+    const late = await assignmentService.submitAssignment(ADMIN, {
+      assignmentId: overdue.assignment.id,
+      studentId: overdue.student.id,
+      contentText: "late",
+      attachmentUrl: null,
+      now: new Date("2026-05-02T09:00:00.000Z")
+    });
+    expect(late.status).toBe("Late");
+  });
+
+  it("replaces a previous submission rather than creating a second", async () => {
+    const { student, assignment } = await setup("Published");
+    for (const text of ["first draft", "second draft"]) {
+      await assignmentService.submitAssignment(ADMIN, {
+        assignmentId: assignment.id,
+        studentId: student.id,
+        contentText: text,
+        attachmentUrl: null,
+        now: new Date("2026-04-30T09:00:00.000Z")
+      });
+    }
+
+    const rows = await prisma.submission.findMany({ where: { assignmentId: assignment.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.contentText).toBe("second draft");
+  });
+});

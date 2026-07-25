@@ -8,6 +8,7 @@ export * from "./queries/section-gradebook-query";
 export * from "./queries/student-directory-query";
 export * from "./queries/attendance-sheet-query";
 export * from "./queries/guardian-query";
+export * from "./queries/student-portal-query";
 export * from "./queries/teacher-workbench-query";
 export * from "./queries/student-query";
 export * from "./queries/teacher-query";
