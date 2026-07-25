@@ -1,19 +1,42 @@
-import { Card, CardHeader, DataTable, LinkButton, PageHeader } from "@agentic-edu/ui";
+import { Card, CardHeader, DataTable, FilterBar, LinkButton, PageHeader, Pagination } from "@agentic-edu/ui";
 import { prisma } from "@agentic-edu/db";
+import { parseEnumParam, parseListParams, buildPagination, withParam } from "@agentic-edu/shared";
 import { scoreTeacherWorkload } from "@agentic-edu/domain";
 import { StatusBadge } from "@/components/status-badge";
 
-export default async function TeachersPage({ searchParams }: { searchParams?: Promise<{ department?: string; status?: string }> }) {
+const EMPLOYMENT_STATUSES = ["Active", "OnLeave", "Inactive"] as const;
+
+type TeacherSearchParams = { q?: string; department?: string; status?: string; page?: string };
+
+export default async function TeachersPage({ searchParams }: { searchParams?: Promise<TeacherSearchParams> }) {
   const params = (await searchParams) ?? {};
+  const listParams = parseListParams(params);
+
+  const where = {
+    department: params.department ? { contains: params.department, mode: "insensitive" as const } : undefined,
+    employmentStatus: parseEnumParam(params.status, EMPLOYMENT_STATUSES),
+    ...(listParams.q
+      ? {
+          OR: [
+            { firstName: { contains: listParams.q, mode: "insensitive" as const } },
+            { lastName: { contains: listParams.q, mode: "insensitive" as const } },
+            { email: { contains: listParams.q, mode: "insensitive" as const } }
+          ]
+        }
+      : {})
+  };
+
+  const total = await prisma.teacher.count({ where });
+  const pagination = buildPagination(total, listParams);
+
   const teachers = await prisma.teacher.findMany({
-    where: {
-      department: params.department ? { contains: params.department, mode: "insensitive" } : undefined,
-      employmentStatus: params.status ? (params.status as never) : undefined
-    },
+    where,
     include: {
       sections: { include: { enrollments: true, assignments: { include: { submissions: true } } } }
     },
-    orderBy: [{ department: "asc" }, { lastName: "asc" }]
+    orderBy: [{ department: "asc" }, { lastName: "asc" }],
+    skip: pagination.skip,
+    take: pagination.take
   });
 
   return (
@@ -21,7 +44,11 @@ export default async function TeachersPage({ searchParams }: { searchParams?: Pr
       <PageHeader title="Teachers" description="Manage teacher records, assignments, workload, activity, and audit context." actions={<LinkButton href="/teachers/new" variant="primary">New teacher</LinkButton>} />
       <Card>
         <CardHeader title="Filters" />
-        <form className="form-grid">
+        <FilterBar resetHref="/teachers">
+          <label className="ui-field">
+            <span>Search</span>
+            <input name="q" placeholder="Name or email" defaultValue={params.q ?? ""} />
+          </label>
           <label className="ui-field">
             <span>Department</span>
             <input name="department" defaultValue={params.department ?? ""} />
@@ -35,10 +62,7 @@ export default async function TeachersPage({ searchParams }: { searchParams?: Pr
               <option value="Inactive">Inactive</option>
             </select>
           </label>
-          <div className="form-actions">
-            <button className="ui-button ui-button--secondary" type="submit">Apply filters</button>
-          </div>
-        </form>
+        </FilterBar>
       </Card>
       <Card>
         <CardHeader title="Teacher Directory" />
@@ -82,6 +106,11 @@ export default async function TeachersPage({ searchParams }: { searchParams?: Pr
             })}
           </tbody>
         </DataTable>
+        <Pagination
+          {...pagination}
+          label="teachers"
+          hrefFor={(page) => `/teachers${withParam(params, "page", page)}`}
+        />
       </Card>
     </>
   );

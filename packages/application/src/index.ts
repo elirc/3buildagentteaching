@@ -5,6 +5,7 @@ export * from "./queries/agent-ops-query";
 export * from "./queries/dashboard-query";
 export * from "./queries/risk-query";
 export * from "./queries/section-gradebook-query";
+export * from "./queries/student-directory-query";
 export * from "./queries/student-query";
 export * from "./queries/teacher-query";
 export * from "./services/academic-service";
