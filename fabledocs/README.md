@@ -7,6 +7,7 @@ education operations / LMS learning codebase in this repo.
 | --- | --- |
 | [01-app-overview.md](./01-app-overview.md) | How the app works today: layering, data model, the four flows you must understand, conventions, and an honest inventory of what is modelled but not wired up. **Read this first.** |
 | [02-user-stories.md](./02-user-stories.md) | 20 detailed user stories for the next phase of work, written to be picked up cold and implemented one at a time. |
+| [03-progress.md](./03-progress.md) | Which stories have actually shipped, what was left partial, and the traps already hit. **Check this before starting a story.** |
 
 ## Who these are for
 

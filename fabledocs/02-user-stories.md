@@ -34,11 +34,14 @@ lifecycle, and the list in §9 of what is modelled but not wired.
 
 ## Board
 
-| # | Story | Size | Depends on |
-| --- | --- | --- | --- |
-| US-01 | Server actions that fail gracefully | M | — |
-| US-02 | Role-aware navigation and action gating | M | US-01 |
-| US-03 | Search, filtering, and pagination on list pages | M | — |
+Status is tracked in [03-progress.md](./03-progress.md) — check it before
+starting, because three of these have already shipped and two left partials.
+
+| # | Story | Size | Depends on | Status |
+| --- | --- | --- | --- | --- |
+| US-01 | Server actions that fail gracefully | M | — | ✅ shipped (#2) |
+| US-02 | Role-aware navigation and action gating | M | US-01 | ✅ shipped (#3), partials |
+| US-03 | Search, filtering, and pagination on list pages | M | — | ✅ shipped (#4), partials |
 | US-04 | Test and CI foundation | L | — |
 | US-05 | Teacher workbench: the grading queue | M | US-02 |
 | US-06 | Rubric-based grading with criterion scores | L | US-05 |
