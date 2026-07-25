@@ -4,6 +4,7 @@ import { ROLE_LABELS } from "@agentic-edu/shared";
 import { DevUserSwitcher } from "@/components/dev-user-switcher";
 import { getActorCapabilities } from "@/lib/capabilities";
 import { navItemsForRole } from "@/lib/navigation";
+import { getUnreadCount } from "@agentic-edu/application";
 
 export const metadata: Metadata = {
   title: "Agentic Education Ops",
@@ -17,6 +18,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // that every page underneath would otherwise repeat.
   const { actor } = await getActorCapabilities();
   const nav = navItemsForRole(actor.role);
+  // One count query — the badge never fetches rows it does not render.
+  const unread = await getUnreadCount(actor);
 
   return (
     <html lang="en">
@@ -44,6 +47,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               */}
               <span className="muted">
                 Acting as <strong>{ROLE_LABELS[actor.role]}</strong>
+                {unread > 0 ? (
+                  <>
+                    {" · "}
+                    <a href="/notifications">
+                      <strong>{unread}</strong> unread
+                    </a>
+                  </>
+                ) : null}
               </span>
               <DevUserSwitcher />
             </div>
