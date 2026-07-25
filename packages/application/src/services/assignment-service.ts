@@ -10,6 +10,7 @@ import {
 import { AppError } from "../errors";
 import { assertCan, type ActorContext } from "../context";
 import { createAuditEvent } from "../audit";
+import { jobService } from "./job-service";
 
 export const assignmentService = {
   async createAssignment(actor: ActorContext, input: AssignmentInput) {
@@ -312,6 +313,29 @@ export const assignmentService = {
         before,
         after: submission
       });
+
+      /*
+       * Enqueued inside the same transaction as the grade.
+       *
+       * If the grade rolls back, the job must roll back with it — otherwise the
+       * queue holds work for a grade that never happened, and the worker
+       * recalculates against data that does not exist.
+       *
+       * The idempotency key is per-assignment, so grading thirty submissions in
+       * one sitting queues one recalculation rather than thirty.
+       */
+      await jobService.enqueue(
+        actor,
+        {
+          type: "GradeRecalculation",
+          payload: { assignmentId: before.assignmentId },
+          idempotencyKey: `grade-recalc:${before.assignmentId}`,
+          relatedAssignmentId: before.assignmentId,
+          relatedStudentId: before.studentId
+        },
+        tx
+      );
+
       return submission;
     });
   }
