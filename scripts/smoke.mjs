@@ -107,18 +107,21 @@ const DATA_CHECKS = [
     // editing the URL, because actor.teacherId wins over the query param.
     url: "/my-work?teacherId=teacher_biology",
     as: "user_teacher_algebra",
-    expect: (html) =>
-      /Nina Patel/.test(html) && !/Marcus Green/.test(html)
+    expect: (html) => {
+      const content = withoutSwitcher(html);
+      return /Nina Patel/.test(content) && !/Marcus Green/.test(content)
         ? null
-        : "teacherId param must not override the acting teacher"
+        : "teacherId param must not override the acting teacher";
+    }
   },
   {
     // Denise Johnson is linked to Maya only. Liam and Sophia must not appear.
     url: "/family",
     as: "user_guardian",
     expect: (html) => {
-      if (!/Maya/.test(html)) return "guardian should see their own child";
-      if (/Liam|Sophia|Noah/.test(html)) return "guardian must not see other families";
+      const content = withoutSwitcher(html);
+      if (!/Maya/.test(content)) return "guardian should see their own child";
+      if (/Liam|Sophia|Noah/.test(content)) return "guardian must not see other families";
       return null;
     }
   },
@@ -143,6 +146,27 @@ const DATA_CHECKS = [
 
 function countStudentRows(html) {
   return new Set([...html.matchAll(/\/students\/(student_[a-z]+)/g)].map((m) => m[1])).size;
+}
+
+/**
+ * Strips the dev user switcher before matching.
+ *
+ * The switcher in the top bar lists *every* user in the system for *every*
+ * actor — that is its entire job, and it is labelled "Local development user
+ * simulation". Its <option> elements are layout chrome, not page content.
+ *
+ * Without this, a negative assertion like "a guardian must not see Liam" fails
+ * on every page in the app, because Liam Brooks is always in the dropdown. The
+ * first version of these checks did exactly that and reported a privacy leak
+ * that did not exist.
+ *
+ * Both forms are removed: the server-rendered <option> markup, and the same
+ * elements as they appear inside React's escaped streaming payload.
+ */
+function withoutSwitcher(html) {
+  return html
+    .replace(/<option value="user_[^"]*"[\s\S]*?<\/option>/g, "")
+    .replace(/\\"option\\",\\"user_[^"]*\\",\{[\s\S]*?\]/g, "");
 }
 
 /**
