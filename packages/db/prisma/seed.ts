@@ -464,16 +464,25 @@ async function main() {
     }))
   });
 
+  /*
+   * Job payloads are now parsed by packages/application/src/jobs/schemas.ts.
+   * The three jobs seeded as failures carry genuinely invalid payloads, so they
+   * fail because the schema rejects them rather than because a hardcoded string
+   * matcher said so:
+   *   job_grade_invalid        assignmentId: null      -> both keys missing
+   *   job_attendance_malformed range: "{bad-json"      -> not a date range
+   *   job_guardian_timeout     guardianEmail bad       -> not an email
+   */
   await prisma.backgroundJob.createMany({
     data: [
-      { id: "job_guardian_timeout", type: "GuardianDigest", status: "Failed", attempts: 2, maxAttempts: 3, payload: { studentId: "student_maya", guardianEmail: "denise.johnson@guardian.example" }, errorMessage: "Email provider timeout", idempotencyKey: "digest:student_maya:week_2026_21", startedAt: daysAgo(1), finishedAt: daysAgo(1), relatedStudentId: "student_maya" },
+      { id: "job_guardian_timeout", type: "GuardianDigest", status: "Failed", attempts: 2, maxAttempts: 3, payload: { studentId: "student_maya", guardianEmail: "not-an-email" }, errorMessage: "Email provider timeout", idempotencyKey: "digest:student_maya:week_2026_21", startedAt: daysAgo(1), finishedAt: daysAgo(1), relatedStudentId: "student_maya" },
       { id: "job_grade_invalid", type: "GradeRecalculation", status: "Failed", attempts: 1, maxAttempts: 3, payload: { assignmentId: null }, errorMessage: "Invalid grade recalculation payload", idempotencyKey: "grade:null", startedAt: daysAgo(2), finishedAt: daysAgo(2), relatedClassSectionId: "section_algebra_a" },
       { id: "job_attendance_malformed", type: "AttendanceSummary", status: "Failed", attempts: 3, maxAttempts: 3, payload: { range: "{bad-json", studentId: "student_maya" }, errorMessage: "Malformed JSON in attendance summary payload", idempotencyKey: "attendance:student_maya:bad", startedAt: daysAgo(3), finishedAt: daysAgo(3), relatedStudentId: "student_maya" },
       { id: "job_report_timeout", type: "ReportGeneration", status: "Retrying", attempts: 2, maxAttempts: 4, payload: { report: "weekly-risk", sectionId: "section_algebra_a" }, errorMessage: "Report generation timeout", idempotencyKey: "report:weekly-risk:section_algebra_a", startedAt: daysAgo(1), nextRunAt: daysAgo(0), relatedClassSectionId: "section_algebra_a" },
       { id: "job_permission", type: "EnrollmentSync", status: "DeadLettered", attempts: 3, maxAttempts: 3, payload: { sectionId: "section_algebra_a" }, errorMessage: "Permission denied for enrollment sync", idempotencyKey: "enrollment-sync:section_algebra_a", startedAt: daysAgo(5), finishedAt: daysAgo(5), relatedClassSectionId: "section_algebra_a" },
       { id: "job_digest_success", type: "GuardianDigest", status: "Succeeded", attempts: 1, maxAttempts: 3, payload: { studentId: "student_liam" }, idempotencyKey: "digest:student_liam:week_2026_21", startedAt: daysAgo(1), finishedAt: daysAgo(1), relatedStudentId: "student_liam" },
       { id: "job_notification_queued", type: "EmailNotification", status: "Queued", attempts: 0, maxAttempts: 3, payload: { notificationId: "notification_maya_guardian_digest", recipient: "denise.johnson@guardian.example" }, idempotencyKey: "email:notification_maya_guardian_digest", scheduledFor: daysAgo(0), nextRunAt: daysAgo(0), relatedStudentId: "student_maya" },
-      { id: "job_agent_review_queued", type: "AgentRun", status: "Queued", attempts: 0, maxAttempts: 2, payload: { agentType: "StudentSuccessReview", studentId: "student_maya" }, idempotencyKey: "agent:student-success:student_maya", scheduledFor: daysAgo(0), nextRunAt: daysAgo(0), relatedStudentId: "student_maya" }
+      { id: "job_agent_review_queued", type: "AgentRun", status: "Queued", attempts: 0, maxAttempts: 2, payload: { agentType: "StudentSuccessReview", targetId: "student_maya" }, idempotencyKey: "agent:student-success:student_maya", scheduledFor: daysAgo(0), nextRunAt: daysAgo(0), relatedStudentId: "student_maya" }
     ]
   });
 
