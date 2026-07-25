@@ -7,8 +7,25 @@ import { NAV_ITEMS, canViewRoute, navItemsForRole } from "./navigation";
  * each of the seven roles and read the screen.
  */
 describe("navigation", () => {
-  it("gives an Admin every link", () => {
-    expect(navItemsForRole("Admin")).toHaveLength(NAV_ITEMS.length);
+  it("gives an Admin every link except the role-specific portals", () => {
+    // Admin used to be a strict superset of every other role. US-08 broke that
+    // on purpose: /family is scoped to a guardian's own children, so there is
+    // nothing coherent for an Admin to see there — they look at /students.
+    //
+    // Portals are the exception to "Admin sees everything", and naming them
+    // here means adding another one has to be a deliberate decision rather
+    // than a silently failing test.
+    const portals = ["/family"];
+    const adminHrefs = navItemsForRole("Admin").map((item) => item.href);
+
+    expect(adminHrefs).toHaveLength(NAV_ITEMS.length - portals.length);
+    for (const portal of portals) {
+      expect(adminHrefs).not.toContain(portal);
+    }
+    // Everything that is not a portal must still be reachable.
+    for (const item of NAV_ITEMS) {
+      if (!portals.includes(item.href)) expect(adminHrefs).toContain(item.href);
+    }
   });
 
   it("keeps operational tooling away from a Viewer", () => {
@@ -24,10 +41,15 @@ describe("navigation", () => {
     expect(hrefs).toContain("/logs");
   });
 
+  it("gives a Guardian their own scoped destination", () => {
+    // US-08 shipped /family, which IS scoped to their children.
+    expect(navItemsForRole("Guardian").map((item) => item.href)).toContain("/family");
+    expect(navItemsForRole("Teacher").map((item) => item.href)).not.toContain("/family");
+  });
+
   it("does not show a Student or Guardian anyone else's data", () => {
-    // Neither role has a scoped destination yet (/my-courses is US-09,
-    // /family is US-08). Until those exist the honest menu is a short one:
-    // every list page in this app is school-wide.
+    // /my-courses (US-09) does not exist yet, so Student stays short. Neither
+    // role gets a school-wide list page.
     for (const role of ["Student", "Guardian"] as const) {
       const hrefs = navItemsForRole(role).map((item) => item.href);
       expect(hrefs).not.toContain("/students");

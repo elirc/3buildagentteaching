@@ -29,7 +29,7 @@ const BOOT_TIMEOUT_MS = Number(process.env.SMOKE_BOOT_TIMEOUT_MS ?? 900_000);
 const REQUEST_TIMEOUT_MS = Number(process.env.SMOKE_REQUEST_TIMEOUT_MS ?? 120_000);
 
 const ROUTES = [
-  "/", "/my-work", "/teachers", "/students", "/courses", "/sections", "/terms", "/enrollments",
+  "/", "/my-work", "/family", "/teachers", "/students", "/courses", "/sections", "/terms", "/enrollments",
   "/assignments", "/rubrics", "/gradebook", "/attendance", "/at-risk", "/interventions",
   "/approvals", "/guardians", "/notifications", "/jobs", "/worker-jobs", "/logs",
   "/agent-runs", "/agent-ops", "/agent-recommendations", "/audit-events", "/settings"

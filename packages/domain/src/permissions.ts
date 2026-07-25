@@ -39,9 +39,15 @@ export interface PermissionActor {
   role: UserRole;
   teacherId?: string | null;
   studentId?: string | null;
-  advisedStudentIds?: string[];
+  /*
+   * readonly because canPerform only ever reads these. Accepting readonly
+   * arrays lets callers pass `as const` literals and frozen values without a
+   * cast, and stops anything downstream mutating an actor's scope in place —
+   * which would be a genuinely alarming thing for a permission check to do.
+   */
+  advisedStudentIds?: readonly string[];
   /** Students this actor is a linked guardian for. */
-  guardianStudentIds?: string[];
+  guardianStudentIds?: readonly string[];
 }
 
 export interface PermissionResource {

@@ -36,6 +36,7 @@ const SUPPORT: UserRole[] = ["Admin", "SchoolManager", "Advisor"];
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/" },
   { label: "My Work", href: "/my-work", roles: [...OPERATORS, "Teacher"] },
+  { label: "Family", href: "/family", roles: ["Guardian"] },
   { label: "Teachers", href: "/teachers", roles: STAFF_AND_VIEWER },
   { label: "Students", href: "/students", roles: STAFF_AND_VIEWER },
   { label: "Courses", href: "/courses", roles: STAFF_AND_VIEWER },
