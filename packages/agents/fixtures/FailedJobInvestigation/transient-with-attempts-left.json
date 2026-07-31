@@ -1,0 +1,19 @@
+{
+  "name": "transient-with-attempts-left",
+  "input": {
+    "job": {
+      "id": "job_report_timeout",
+      "type": "ReportGeneration",
+      "status": "Retrying",
+      "attempts": 1,
+      "maxAttempts": 4,
+      "errorMessage": "Report generation timeout",
+      "payload": { "report": "weekly-risk", "sectionId": "section_algebra_a" }
+    },
+    "relatedLogs": [{ "level": "error", "message": "Timeout after 30000ms", "fingerprint": "aaa111bbb222" }]
+  },
+  "expected": { "retryRecommendation": "Retry" },
+  "assertions": [
+    { "path": "summary", "op": "contains", "value": "ReportGeneration" }
+  ]
+}

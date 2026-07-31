@@ -1,0 +1,14 @@
+{
+  "name": "late-empty-submission",
+  "input": {
+    "assignment": { "title": "Budget Model Project", "type": "Project", "dueDate": "2026-01-10T00:00:00.000Z", "pointsPossible": 50 },
+    "submission": { "status": "Late", "submittedAt": "2026-01-12T00:00:00.000Z", "contentText": "", "score": 20 },
+    "rubricFields": ["reasoning", "evidence", "complete", "reflection"]
+  },
+  "expected": { "lateSubmissionNote": "present", "missingCriteria": "non-empty" },
+  "assertions": [
+    { "path": "missingCriteria", "op": "arrayIncludes", "value": "complete" },
+    { "path": "teacherFacingGradingNotes", "op": "arrayIncludes", "value": "Submission text is empty or missing." },
+    { "path": "teacherFacingGradingNotes", "op": "arrayIncludes", "value": "Submission was late." }
+  ]
+}

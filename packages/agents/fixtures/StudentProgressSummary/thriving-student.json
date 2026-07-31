@@ -1,0 +1,24 @@
+{
+  "name": "thriving-student",
+  "input": {
+    "studentProfile": { "id": "student_liam", "firstName": "Liam", "lastName": "Brooks", "enrollmentStatus": "Active", "gradeLevel": 9 },
+    "activeEnrollments": [{ "sectionName": "SCI-110 Fall 2026", "courseTitle": "Biology" }],
+    "recentGrades": [
+      { "score": 19, "pointsPossible": 20, "status": "Graded", "gradedAt": "2026-09-10T00:00:00.000Z" },
+      { "score": 18, "pointsPossible": 20, "status": "Graded", "gradedAt": "2026-09-20T00:00:00.000Z" },
+      { "score": 20, "pointsPossible": 20, "status": "Graded", "gradedAt": "2026-10-01T00:00:00.000Z" }
+    ],
+    "missingAssignments": 0,
+    "lateAssignments": 0,
+    "attendanceRecords": [
+      { "status": "Present", "date": "2026-10-05T00:00:00.000Z" },
+      { "status": "Present", "date": "2026-10-06T00:00:00.000Z" }
+    ],
+    "supportNotes": [],
+    "activeInterventionPlans": []
+  },
+  "expected": { "interventionRecommended": false },
+  "assertions": [
+    { "path": "interventionRecommended", "op": "equals", "value": false }
+  ]
+}

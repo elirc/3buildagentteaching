@@ -37,6 +37,13 @@ jobs:
       # stop running it. A slow job on CI costs nobody's attention.
       - run: npm run lint
       - run: npm test
+      # Golden-fixture evaluations, in --dry so this job needs no database. The
+      # CLI exits non-zero when any fixture fails, which is the point: an agent
+      # change that degrades output should fail here rather than be noticed on
+      # a dashboard weeks later. Recording rows is a deliberate local/manual
+      # step — CI writing evaluation history to a throwaway database would
+      # produce history nobody can read.
+      - run: npm run agents:eval -- --dry
 
   integration:
     name: integration

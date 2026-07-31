@@ -1,0 +1,45 @@
+{
+  "name": "low-risk-thin-inputs",
+  "input": {
+    "studentName": "New Enrollee",
+    "progress": {
+      "academicSummary": "No graded work yet for New Enrollee.",
+      "strengths": [],
+      "concerns": [],
+      "gradeTrend": "InsufficientData",
+      "attendanceTrend": "None",
+      "missingWorkSummary": "No missing work",
+      "recommendedNextActions": [],
+      "recommendedOwner": "Teacher",
+      "interventionRecommended": false
+    },
+    "risk": {
+      "riskScore": 18,
+      "riskLevel": "Low",
+      "primaryRiskAreas": [],
+      "evidence": ["No recent graded work is available."],
+      "recommendedIntervention": "Monitor weekly and document support notes.",
+      "suggestedFollowUpDate": "2026-10-20",
+      "escalationRecommendation": "Continue monitoring through normal teacher/advisor workflow."
+    },
+    "attendance": {
+      "anomalyScore": 5,
+      "anomalyType": "NoAnomaly",
+      "affectedTarget": "New Enrollee",
+      "evidence": [],
+      "suspectedCauseCategory": "Unknown",
+      "recommendedNextAction": "No action required",
+      "advisorFollowUpRecommended": false
+    },
+    "activeInterventions": [],
+    "guardianDigestOptIn": false,
+    "now": "2026-10-13T00:00:00.000Z"
+  },
+  "expected": {
+    "why": "Everything is quiet and nothing is known. The review should not manufacture urgency, and the seven-day window applies."
+  },
+  "assertions": [
+    { "path": "nextReviewDate", "op": "equals", "value": "2026-10-20" },
+    { "path": "subagentSummaries", "op": "length", "value": 3 }
+  ]
+}

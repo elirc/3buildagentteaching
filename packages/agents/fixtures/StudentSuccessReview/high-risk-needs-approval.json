@@ -1,0 +1,44 @@
+{
+  "name": "high-risk-needs-approval",
+  "input": {
+    "studentName": "Maya Johnson",
+    "progress": {
+      "academicSummary": "Maya is improving in Biology but declining in Algebra.",
+      "strengths": ["Biology improvement"],
+      "concerns": ["Algebra missing work"],
+      "gradeTrend": "Declining",
+      "attendanceTrend": "Concern",
+      "missingWorkSummary": "4 missing assignments",
+      "recommendedNextActions": ["Advisor follow-up"],
+      "recommendedOwner": "Advisor",
+      "interventionRecommended": true
+    },
+    "risk": {
+      "riskScore": 76,
+      "riskLevel": "High",
+      "primaryRiskAreas": ["Grades", "Attendance"],
+      "evidence": ["Grade average below threshold"],
+      "recommendedIntervention": "Update active Algebra intervention.",
+      "suggestedFollowUpDate": "2026-10-20",
+      "escalationRecommendation": "Assign advisor follow-up this week."
+    },
+    "attendance": {
+      "anomalyScore": 70,
+      "anomalyType": "AbsenceStreak",
+      "affectedTarget": "Maya Johnson",
+      "evidence": ["Three absences in a row"],
+      "suspectedCauseCategory": "AcademicEngagement",
+      "recommendedNextAction": "Advisor follow-up",
+      "advisorFollowUpRecommended": true
+    },
+    "activeInterventions": [{ "riskArea": "Grades", "summary": "Algebra plan" }],
+    "guardianDigestOptIn": true,
+    "now": "2026-10-13T00:00:00.000Z"
+  },
+  "expected": { "needsHumanApproval": true },
+  "assertions": [
+    { "path": "needsHumanApproval", "op": "equals", "value": true },
+    { "path": "subagentSummaries", "op": "length", "value": 3 },
+    { "path": "nextReviewDate", "op": "equals", "value": "2026-10-20" }
+  ]
+}

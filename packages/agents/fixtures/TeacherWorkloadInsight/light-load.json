@@ -1,0 +1,18 @@
+{
+  "name": "light-load",
+  "input": {
+    "teacherProfile": { "id": "teacher_english", "name": "Sam Ortiz", "employmentStatus": "Active" },
+    "activeSectionCount": 1,
+    "studentCount": 18,
+    "activeAssignmentCount": 2,
+    "ungradedSubmissionCount": 0,
+    "highRiskStudentCount": 0,
+    "recentSupportNoteCount": 0,
+    "failedJobCount": 0
+  },
+  "expected": { "workloadScore": "low" },
+  "assertions": [
+    { "path": "workloadScore", "op": "lessThan", "value": 40 },
+    { "path": "overloadedIndicators", "op": "length", "value": 0 }
+  ]
+}

@@ -34,7 +34,7 @@ export const atRiskStudentDetectionAgent: AgentDefinition<AtRiskInput, AtRiskOut
       primaryRiskAreas: result.primaryAreas,
       evidence: result.evidence,
       recommendedIntervention,
-      suggestedFollowUpDate: nextFollowUpDate(result.level === "Critical" ? 2 : 7),
+      suggestedFollowUpDate: nextFollowUpDate(result.level === "Critical" ? 2 : 7, input.now),
       escalationRecommendation:
         result.level === "Critical"
           ? "Escalate to school manager and advisor within two school days."

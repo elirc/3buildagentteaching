@@ -1,0 +1,16 @@
+{
+  "name": "sparse-single-record",
+  "input": {
+    "targetName": "New Enrollee",
+    "targetType": "Student",
+    "records": [{ "status": "Absent", "date": "2026-01-01T00:00:00.000Z" }],
+    "dateRangeLabel": "recent records",
+    "historicalAverageIssuePoints": 2
+  },
+  "expected": {
+    "why": "One record is not a pattern. The agent must not claim a streak from a single data point, and its confidence should reflect how little it had to work with."
+  },
+  "assertions": [
+    { "path": "affectedTarget", "op": "equals", "value": "New Enrollee" }
+  ]
+}

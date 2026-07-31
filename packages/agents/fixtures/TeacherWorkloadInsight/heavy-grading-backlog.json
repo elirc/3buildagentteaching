@@ -1,0 +1,18 @@
+{
+  "name": "heavy-grading-backlog",
+  "input": {
+    "teacherProfile": { "id": "teacher_algebra", "name": "Nina Patel", "employmentStatus": "Active" },
+    "activeSectionCount": 4,
+    "studentCount": 120,
+    "activeAssignmentCount": 12,
+    "ungradedSubmissionCount": 48,
+    "highRiskStudentCount": 6,
+    "recentSupportNoteCount": 5,
+    "failedJobCount": 1
+  },
+  "expected": { "workloadScore": "high" },
+  "assertions": [
+    { "path": "workloadScore", "op": "greaterThan", "value": 60 },
+    { "path": "gradingBacklogSummary", "op": "contains", "value": "48" }
+  ]
+}

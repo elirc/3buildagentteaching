@@ -1,0 +1,13 @@
+{
+  "name": "sparse-one-submission",
+  "input": {
+    "assignment": { "id": "assignment_new", "title": "Just Published", "type": "Homework", "pointsPossible": 10 },
+    "submissions": [{ "studentId": "s1", "status": "Graded", "score": 8, "feedback": "Nice." }]
+  },
+  "expected": {
+    "why": "One submission cannot be inconsistent with anything. The agent must not report an outlier from a sample of one, and its confidence should drop."
+  },
+  "assertions": [
+    { "path": "consistencyScore", "op": "greaterThan", "value": 0 }
+  ]
+}

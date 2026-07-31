@@ -21,8 +21,24 @@ export function trace(step: string, detail: string, scoreDelta?: number): AgentT
   return { step, detail, scoreDelta };
 }
 
-export function nextFollowUpDate(days = 7): string {
-  const date = new Date();
+/**
+ * A follow-up date `days` after `now`.
+ *
+ * `now` is a parameter because this function is the one place the agent layer
+ * reached for the wall clock, and it made every agent that calls it
+ * non-deterministic: `suggestedFollowUpDate` changed with the calendar, so a
+ * golden-fixture harness comparing against a recorded value would fail every
+ * day after the day it was recorded. That is the failure mode where a team
+ * concludes their eval suite is flaky and stops trusting it.
+ *
+ * The default is deliberately NOT `new Date()`. Defaulting to the wall clock
+ * would leave every existing caller non-deterministic while looking fixed —
+ * the injection would be available and unused. Callers pass `now` through their
+ * input type; `persistAgentRun` supplies one `new Date()` per run so a single
+ * run is internally consistent.
+ */
+export function nextFollowUpDate(days: number, now: Date): string {
+  const date = new Date(now.getTime());
   date.setDate(date.getDate() + days);
   return date.toISOString().slice(0, 10);
 }

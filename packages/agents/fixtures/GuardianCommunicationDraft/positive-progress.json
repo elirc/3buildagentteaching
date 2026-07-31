@@ -1,0 +1,25 @@
+{
+  "name": "positive-progress",
+  "input": {
+    "studentName": "Liam Brooks",
+    "guardianName": "Harper Brooks",
+    "guardianEmail": "harper.brooks@guardian.example",
+    "communicationReason": "PositiveProgress",
+    "gradeSummary": {
+      "average": 92, "earnedPoints": 184, "possiblePoints": 200, "missingCount": 0,
+      "lateCount": 0, "gradedCount": 8, "trend": "Improving", "performanceBand": "Excellent"
+    },
+    "attendanceSummary": {
+      "present": 24, "absent": 0, "tardy": 0, "excused": 0, "issuePoints": 0,
+      "attendanceRate": 100, "concernLevel": "None", "longestAbsenceStreak": 0
+    },
+    "missingAssignmentCount": 0,
+    "activeInterventionSummary": null,
+    "teacherNotes": []
+  },
+  "expected": { "tone": "Celebratory" },
+  "assertions": [
+    { "path": "tone", "op": "equals", "value": "Celebratory" },
+    { "path": "draftBody", "op": "contains", "value": "Harper Brooks" }
+  ]
+}

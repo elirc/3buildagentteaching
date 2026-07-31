@@ -25,7 +25,8 @@
     "test:integration": "vitest run --project integration",
     "test:db:up": "docker compose -f docker-compose.test.yml up -d --wait",
     "test:db:down": "docker compose -f docker-compose.test.yml down -v",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "agents:eval": "tsx scripts/run-agent-evals.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.21",

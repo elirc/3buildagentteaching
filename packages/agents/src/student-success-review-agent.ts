@@ -34,7 +34,7 @@ export const studentSuccessReviewAgent: AgentDefinition<StudentSuccessReviewInpu
         { agentType: "AttendanceAnomaly", summary: input.attendance.recommendedNextAction, confidence: 78 }
       ],
       needsHumanApproval: highConcern || attendanceConcern || !hasActiveIntervention,
-      nextReviewDate: nextFollowUpDate(input.risk.riskLevel === "Critical" ? 2 : 7)
+      nextReviewDate: nextFollowUpDate(input.risk.riskLevel === "Critical" ? 2 : 7, input.now)
     };
 
     return {

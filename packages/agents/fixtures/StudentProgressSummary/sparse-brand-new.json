@@ -1,0 +1,20 @@
+{
+  "name": "sparse-brand-new",
+  "input": {
+    "studentProfile": { "id": "student_new", "firstName": "New", "lastName": "Enrollee", "enrollmentStatus": "Active", "gradeLevel": 10 },
+    "activeEnrollments": [],
+    "recentGrades": [],
+    "missingAssignments": 0,
+    "lateAssignments": 0,
+    "attendanceRecords": [],
+    "supportNotes": [],
+    "activeInterventionPlans": []
+  },
+  "expected": {
+    "why": "Nothing has happened yet. A summary that reads as confident about a student with no data is worse than one that says it has none."
+  },
+  "assertions": [
+    { "path": "interventionRecommended", "op": "equals", "value": false },
+    { "path": "academicSummary", "op": "contains", "value": "New Enrollee" }
+  ]
+}

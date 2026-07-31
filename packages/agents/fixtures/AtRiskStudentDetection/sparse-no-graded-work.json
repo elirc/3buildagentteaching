@@ -1,0 +1,36 @@
+{
+  "name": "sparse-no-graded-work",
+  "input": {
+    "studentName": "New Enrollee",
+    "gradeSummary": {
+      "average": null,
+      "earnedPoints": 0,
+      "possiblePoints": 0,
+      "missingCount": 0,
+      "lateCount": 0,
+      "gradedCount": 0,
+      "trend": "InsufficientData",
+      "performanceBand": "InsufficientData"
+    },
+    "attendanceSummary": {
+      "present": 0,
+      "absent": 0,
+      "tardy": 0,
+      "excused": 0,
+      "issuePoints": 0,
+      "longestAbsenceStreak": 0,
+      "attendanceRate": null,
+      "concernLevel": "None"
+    },
+    "interventionHistory": [],
+    "recentSupportNotes": [],
+    "now": "2026-10-13T00:00:00.000Z"
+  },
+  "expected": {
+    "note": "No data at all. The agent must report low confidence rather than a confident 'Low risk'."
+  },
+  "assertions": [
+    { "path": "riskLevel", "op": "equals", "value": "Low" },
+    { "path": "primaryRiskAreas", "op": "length", "value": 0 }
+  ]
+}

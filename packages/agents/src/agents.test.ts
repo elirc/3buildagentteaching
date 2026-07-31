@@ -1,8 +1,9 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { agentRegistry } from "./registry";
 import { confidenceFromSubagents } from "./helpers";
+import { evaluateFixture, type AgentFixture, type FixtureAssertion } from "./evaluation";
 import {
   assignmentFeedbackAgent,
   atRiskStudentDetectionAgent,
@@ -13,6 +14,15 @@ import {
   studentSuccessReviewAgent,
   teacherWorkloadInsightAgent
 } from "./index";
+
+/**
+ * A fixed clock for every agent that takes one.
+ *
+ * Not `new Date()`. These tests assert on output that includes a follow-up
+ * date; with a live clock they would pass today and fail tomorrow, which is
+ * precisely the flakiness US-19's clock injection exists to remove.
+ */
+const FIXED_NOW = new Date("2026-10-13T00:00:00.000Z");
 
 describe("mock agent heuristics", () => {
   it("student progress agent recommends intervention for Maya-like data", () => {
@@ -67,7 +77,8 @@ describe("mock agent heuristics", () => {
         longestAbsenceStreak: 3
       },
       interventionHistory: [{ status: "Active", riskArea: "Grades", summary: "Algebra plan" }],
-      recentSupportNotes: []
+      recentSupportNotes: [],
+      now: FIXED_NOW
     });
 
     expect(result.output.recommendedIntervention).toContain("active intervention");
@@ -102,7 +113,8 @@ describe("mock agent heuristics", () => {
         longestAbsenceStreak: 6
       },
       interventionHistory: [],
-      recentSupportNotes: []
+      recentSupportNotes: [],
+      now: FIXED_NOW
     });
 
     expect(critical.output.riskLevel).toBe("Critical");
@@ -128,7 +140,8 @@ describe("mock agent heuristics", () => {
         attendanceRate: 66, concernLevel: "Watch", longestAbsenceStreak: 1
       },
       interventionHistory: [],
-      recentSupportNotes: []
+      recentSupportNotes: [],
+      now: FIXED_NOW
     });
     expect(high.output.riskLevel).toBe("High");
     expect(high.recommendations[0]?.owner).toBe("Advisor");
@@ -262,13 +275,154 @@ describe("mock agent heuristics", () => {
         advisorFollowUpRecommended: true
       },
       activeInterventions: [{ riskArea: "Grades", summary: "Algebra plan" }],
-      guardianDigestOptIn: true
+      guardianDigestOptIn: true,
+      now: FIXED_NOW
     });
 
     expect(result.output.needsHumanApproval).toBe(true);
     expect(result.output.subagentSummaries).toHaveLength(3);
   });
 });
+
+describe("evaluateFixture", () => {
+  const fixture = (assertions: FixtureAssertion[]): AgentFixture => ({ name: "test", input: {}, assertions });
+
+  it("scores the fraction of assertions that held", () => {
+    const result = evaluateFixture(
+      fixture([
+        { path: "riskLevel", op: "equals", value: "High" },
+        { path: "riskScore", op: "greaterThan", value: 90 }
+      ]),
+      { riskLevel: "High", riskScore: 65 }
+    );
+
+    // 0.5 and "failed" are different facts. A harness recording only pass/fail
+    // loses the difference between one assertion drifting and the agent
+    // breaking outright.
+    expect(result.score).toBe(0.5);
+    expect(result.passed).toBe(false);
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]?.path).toBe("riskScore");
+  });
+
+  it("supports every operator", () => {
+    const actual = {
+      riskLevel: "High",
+      summary: "Escalate to the advisor",
+      riskScore: 65,
+      areas: ["Grades", "Attendance"],
+      nested: { deep: { value: 3 } }
+    };
+
+    const passing = evaluateFixture(
+      fixture([
+        { path: "riskLevel", op: "equals", value: "High" },
+        { path: "summary", op: "contains", value: "advisor" },
+        { path: "riskScore", op: "lessThan", value: 80 },
+        { path: "riskScore", op: "greaterThan", value: 60 },
+        { path: "areas", op: "arrayIncludes", value: "Attendance" },
+        { path: "areas", op: "length", value: 2 },
+        { path: "nested.deep.value", op: "equals", value: 3 },
+        { path: "areas[0]", op: "equals", value: "Grades" }
+      ]),
+      actual
+    );
+
+    expect(passing.failures).toEqual([]);
+    expect(passing.passed).toBe(true);
+  });
+
+  it("reports a missing field as a failed assertion rather than throwing", () => {
+    /*
+     * The important behaviour for a harness: an agent that stops producing a
+     * field must fail that one fixture, not crash the run and take the other
+     * twenty-six results with it.
+     */
+    const result = evaluateFixture(fixture([{ path: "gone.entirely", op: "equals", value: 1 }]), { present: true });
+
+    expect(result.passed).toBe(false);
+    expect(result.failures[0]?.actual).toBeUndefined();
+  });
+
+  it("fails type-mismatched comparisons instead of coercing", () => {
+    // "65" > 60 is true in JavaScript and meaningless here. A string where a
+    // number belongs is a real difference worth reporting.
+    const result = evaluateFixture(fixture([{ path: "score", op: "greaterThan", value: 60 }]), { score: "65" });
+
+    expect(result.passed).toBe(false);
+    expect(result.failures[0]?.reason).toContain("not a number");
+  });
+
+  it("passes a fixture with no assertions, and scores it 1", () => {
+    // Worth pinning: it asserts nothing, so there is nothing to fail — but
+    // writing one buys no coverage, which the test name says out loud.
+    expect(evaluateFixture(fixture([]), {})).toMatchObject({ passed: true, score: 1 });
+  });
+});
+
+describe("agents are deterministic", () => {
+  /*
+   * A repo-wide scan, not a per-agent review. The rule is easy to state and
+   * easy to break by accident — a `new Date()` added inside an agent looks
+   * harmless and makes every fixture comparing against a recorded date fail on
+   * the next calendar day. Teams then conclude their eval suite is flaky and
+   * stop trusting it, which is a much more expensive outcome than a red test.
+   *
+   * The pattern is `new Date()` with no arguments specifically.
+   * `new Date(now.getTime())` is deterministic given `now` and is how the
+   * clock-injected helper builds its result, so banning the constructor
+   * outright would ban the fix as well as the bug.
+   */
+  const sourceFiles = readdirSync(__dirname)
+    .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+    .map((file) => ({ file, contents: readFileSync(resolve(__dirname, file), "utf8") }));
+
+  it("has source files to scan", () => {
+    // Guards the guard: a scan over an empty list passes for the wrong reason.
+    expect(sourceFiles.length).toBeGreaterThan(8);
+  });
+
+  it("reads no wall clock", () => {
+    const offenders = sourceFiles
+      .filter(({ contents }) => /new Date\(\s*\)|Date\.now\(/.test(stripComments(contents)))
+      .map(({ file }) => file);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("uses no randomness", () => {
+    const offenders = sourceFiles
+      .filter(({ contents }) => /Math\.random\(/.test(stripComments(contents)))
+      .map(({ file }) => file);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("produces identical output for identical input", () => {
+    // The property all of the above exist to protect, asserted directly.
+    const input = {
+      studentName: "Maya Johnson",
+      gradeSummary: {
+        average: 56, earnedPoints: 112, possiblePoints: 200, missingCount: 4,
+        lateCount: 2, gradedCount: 5, trend: "Declining" as const, performanceBand: "AtRisk" as const
+      },
+      attendanceSummary: {
+        present: 10, absent: 5, tardy: 2, excused: 1, issuePoints: 7,
+        attendanceRate: 61, concernLevel: "Concern" as const, longestAbsenceStreak: 2
+      },
+      interventionHistory: [],
+      recentSupportNotes: [],
+      now: new Date("2026-10-13T00:00:00.000Z")
+    };
+
+    expect(atRiskStudentDetectionAgent.run(input).output).toEqual(atRiskStudentDetectionAgent.run(input).output);
+  });
+});
+
+/** Comments legitimately mention the banned patterns while explaining them. */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+}
 
 describe("confidenceFromSubagents", () => {
   it("penalises a parent whose weakest child was unsure", () => {
