@@ -2,6 +2,7 @@ import { Prisma, prisma } from "@agentic-edu/db";
 import {
   canTransitionApproval,
   decideGuardianUnlink,
+  decideTermClosure,
   nextNotificationStatusAfterRead,
   validateAcademicTerm,
   validateGradingPeriod
@@ -18,6 +19,7 @@ import { assertCan, type ActorContext } from "../context";
 import { AppError } from "../errors";
 import { withServiceLogging } from "../logging";
 import { findOrCreateGuardian } from "./student-service";
+import { agentRunService } from "./agent-run-service";
 
 /**
  * Enforces "exactly one primary guardian per student" by demoting the others.
@@ -125,6 +127,62 @@ export const academicOperationsService = withServiceLogging("academic-operations
         after: period
       });
       return period;
+    });
+  },
+
+  /**
+   * Closes a term, but only once its grades are final.
+   *
+   * The order is the design: refuse if anything is ungraded, run the postmortem,
+   * then set the status. Running the agent first and closing regardless would
+   * produce a postmortem of a term whose numbers were still moving; closing
+   * first and reporting after would mean the report describes a term nobody can
+   * correct any more.
+   *
+   * The agent runs OUTSIDE the transaction that flips the status, for the same
+   * reason worker jobs dispatch agents outside theirs: agentRunService opens its
+   * own transactions, and nesting them would tie the AgentRun row's fate to this
+   * one. A postmortem that is rolled back with a failed close is evidence
+   * destroyed at the moment it is most useful.
+   */
+  async closeTerm(actor: ActorContext, termId: string, now: Date = new Date()) {
+    assertCan(actor, "term:manage");
+
+    const term = await prisma.academicTerm.findUniqueOrThrow({
+      where: { id: termId },
+      include: { sections: { include: { assignments: { include: { submissions: true } } } } }
+    });
+
+    const ungraded = term.sections
+      .flatMap((section) => section.assignments)
+      .flatMap((assignment) => assignment.submissions)
+      .filter((submission) => submission.status === "Submitted" || submission.status === "Late");
+
+    const decision = decideTermClosure({ ungradedCount: ungraded.length, status: term.status });
+    if (!decision.allowed) {
+      throw new AppError("CONFLICT", decision.reason ?? "This term cannot be closed.", {
+        termId,
+        ungradedCount: ungraded.length,
+        // The ids, so the UI can list what is blocking rather than just the count.
+        ungradedSubmissionIds: ungraded.slice(0, 25).map((submission) => submission.id)
+      });
+    }
+
+    const run = await agentRunService.runTermPostmortemAgent(actor, termId, now);
+
+    return prisma.$transaction(async (tx) => {
+      const before = await tx.academicTerm.findUniqueOrThrow({ where: { id: termId } });
+      const closed = await tx.academicTerm.update({ where: { id: termId }, data: { status: "Closed" } });
+      await createAuditEvent(tx, {
+        actorUserId: actor.id,
+        action: "term.closed",
+        entityType: "AcademicTerm",
+        entityId: termId,
+        before,
+        after: closed,
+        metadata: { postmortemRunId: run.id }
+      });
+      return { term: closed, postmortemRunId: run.id };
     });
   },
 

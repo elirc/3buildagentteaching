@@ -18,12 +18,16 @@ import type {
   StudentProgressOutput,
   TeacherWorkloadAgentInput,
   TeacherWorkloadAgentOutput,
+  TermPostmortemInput,
+  TermPostmortemOutput,
   AgentRecommendation as AgentRecommendationSuggestion
 } from "@agentic-edu/agents";
 import { Prisma, prisma } from "@agentic-edu/db";
 import {
+  analyseTerm,
   calculateGradeSummary,
   scoreStudentRisk,
+  scoreTeacherWorkload,
   summarizeAttendance,
   PERMISSION_ACTIONS
 } from "@agentic-edu/domain";
@@ -403,6 +407,27 @@ export const agentRunService = withServiceLogging("agent-run-service", {
    * behaviour an advisor needs: "the review failed because the attendance agent
    * did" is actionable, and the two runs that did work are still worth reading.
    */
+  /**
+   * Reviews a whole term.
+   *
+   * Targets an AcademicTerm rather than a student, which is why US-20 had to
+   * add an AgentTargetType — and why the manifest's supportedTargets matter:
+   * pointing this at a Student is refused by the gate rather than producing a
+   * confident report about the wrong kind of thing.
+   */
+  async runTermPostmortemAgent(actor: ActorContext, termId: string, now: Date = new Date()) {
+    assertCan(actor, "agent:run");
+    const agentInput = await buildTermPostmortemInput(termId, now);
+    return persistAgentRun<TermPostmortemInput, TermPostmortemOutput>({
+      actor,
+      agentType: "TermPostmortem",
+      targetType: "AcademicTerm",
+      targetId: termId,
+      inputSnapshot: agentInput,
+      execute: () => executeAgent<TermPostmortemInput, TermPostmortemOutput>("TermPostmortem", agentInput)
+    });
+  },
+
   async runStudentSuccessReviewAgent(actor: ActorContext, studentId: string, now: Date = new Date()) {
     assertCan(actor, "agent:run", { studentId });
 
@@ -790,6 +815,134 @@ async function buildGradingConsistencyInput(assignmentId: string): Promise<Gradi
       }))
     }))
   };
+}
+
+/**
+ * Everything the postmortem needs about a term, in one pass.
+ *
+ * The aggregation itself is `analyseTerm` in packages/domain — this only
+ * fetches and shapes. That split is what makes the thresholds testable without
+ * a database, and it is the same division the story asks for: the handler
+ * fetches and persists, the domain decides.
+ */
+export async function buildTermPostmortemInput(termId: string, now: Date): Promise<TermPostmortemInput> {
+  const term = await prisma.academicTerm.findUniqueOrThrow({
+    where: { id: termId },
+    include: {
+      sections: {
+        include: {
+          course: true,
+          teacher: true,
+          enrollments: true,
+          assignments: { include: { submissions: true } }
+        }
+      }
+    }
+  });
+
+  const sectionIds = term.sections.map((section) => section.id);
+  const [interventions, deadLettered, students, recommendations] = await Promise.all([
+    // Interventions are not scoped to a term in the schema, so this is the
+    // whole set. Narrowing it would need an intervention-to-term link that
+    // does not exist; claiming a term-scoped number we cannot compute would be
+    // worse than reporting the school-wide one and saying so.
+    prisma.interventionPlan.findMany({ select: { status: true, riskArea: true } }),
+    prisma.backgroundJob.count({ where: { status: "DeadLettered" } }),
+    prisma.student.findMany({
+      where: sectionIds.length > 0 ? { enrollments: { some: { classSectionId: { in: sectionIds } } } } : { id: "none" },
+      include: { submissions: { include: { assignment: true } }, attendanceRecords: true, interventionPlans: true, supportNotes: true }
+    }),
+    prisma.agentRecommendation.findMany({ select: { status: true } })
+  ]);
+
+  const sections = term.sections.map((section) => {
+    // Paired with their assignment so pointsPossible travels with the score.
+    // Flattening submissions on their own and looking pointsPossible up by
+    // index is the shape of bug that produces a plausible wrong average.
+    const scored = section.assignments.flatMap((assignment) =>
+      assignment.submissions
+        .filter((submission) => typeof submission.score === "number")
+        .map((submission) => ({ score: submission.score ?? 0, pointsPossible: assignment.pointsPossible }))
+    );
+    const submissions = section.assignments.flatMap((assignment) => assignment.submissions);
+    const enrolled = section.enrollments.filter((enrollment) => enrollment.status === "Enrolled");
+
+    const possible = scored.reduce((sum, entry) => sum + entry.pointsPossible, 0);
+    const earned = scored.reduce((sum, entry) => sum + entry.score, 0);
+    const classAverage = possible > 0 ? (earned / possible) * 100 : null;
+
+    return {
+      sectionId: section.id,
+      sectionLabel: `${section.course.code} · ${section.room}`,
+      teacherName: `${section.teacher.firstName} ${section.teacher.lastName}`,
+      enrolledCount: enrolled.length,
+      classAverage,
+      submittedCount: submissions.filter((submission) => submission.status !== "Missing" && submission.status !== "NotStarted").length,
+      missingCount: submissions.filter((submission) => submission.status === "Missing").length,
+      ungradedCount: submissions.filter(
+        (submission) => submission.status === "Submitted" || submission.status === "Late"
+      ).length,
+      attendanceConcernCount: 0
+    };
+  });
+
+  const studentRiskLevels = students.map((student) => {
+    const gradeSummary = calculateGradeSummary(
+      student.submissions.map((submission) => ({
+        score: submission.score,
+        pointsPossible: submission.assignment.pointsPossible,
+        status: submission.status,
+        gradedAt: submission.gradedAt
+      }))
+    );
+    const attendanceSummary = summarizeAttendance(
+      student.attendanceRecords.map((record) => ({ status: record.status, date: record.date }))
+    );
+    return scoreStudentRisk({
+      gradeSummary,
+      attendanceSummary,
+      activeInterventionCount: student.interventionPlans.filter((plan) => plan.status === "Active").length,
+      recentSupportNoteCount: student.supportNotes.length
+    }).level;
+  });
+
+  // Attendance concerns per section, counted from the students actually in it.
+  for (const section of sections) {
+    section.attendanceConcernCount = students.filter((student) => {
+      const summary = summarizeAttendance(
+        student.attendanceRecords
+          .filter((record) => record.classSectionId === section.sectionId)
+          .map((record) => ({ status: record.status, date: record.date }))
+      );
+      return summary.concernLevel === "Concern" || summary.concernLevel === "Severe";
+    }).length;
+  }
+
+  const analysis = analyseTerm({
+    termName: term.name,
+    sections,
+    interventions,
+    teacherWorkloads: term.sections.map((section) => ({
+      teacherName: `${section.teacher.firstName} ${section.teacher.lastName}`,
+      score: scoreTeacherWorkload({
+        employmentStatus: section.teacher.employmentStatus,
+        activeSectionCount: 1,
+        studentCount: section.enrollments.length,
+        activeAssignmentCount: section.assignments.length,
+        ungradedSubmissionCount: section.assignments.flatMap((assignment) => assignment.submissions).filter((submission) => submission.status === "Submitted" || submission.status === "Late").length,
+        highRiskStudentCount: 0
+      }).score
+    })),
+    agentRunCount: 0,
+    recommendationsProposed: recommendations.length,
+    recommendationsAccepted: recommendations.filter(
+      (recommendation) => recommendation.status === "Approved" || recommendation.status === "Completed"
+    ).length,
+    deadLetteredJobCount: deadLettered,
+    studentRiskLevels
+  });
+
+  return { termName: term.name, termStatus: term.status, analysis, now };
 }
 
 /*
