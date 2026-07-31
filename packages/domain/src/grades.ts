@@ -5,6 +5,23 @@ export interface ScoreRecord {
   pointsPossible: number;
   status?: string;
   gradedAt?: Date | null;
+  /** Which grading period this work belongs to, when weighting is in play. */
+  gradingPeriodId?: string | null;
+}
+
+export interface WeightedPeriodBreakdown {
+  gradingPeriodId: string;
+  weight: number;
+  /** The unweighted percentage for this period alone, or null with no scored work. */
+  average: number | null;
+  earnedPoints: number;
+  possiblePoints: number;
+}
+
+export interface WeightedGradeSummary extends GradeSummary {
+  /** The weighted final, or the flat average when no weights applied. */
+  weightedAverage: number | null;
+  periods: WeightedPeriodBreakdown[];
 }
 
 export interface GradeSummary {
@@ -98,6 +115,83 @@ export function calculateGradeSummary(scores: ScoreRecord[]): GradeSummary {
     trend: calculateTrend(scores),
     performanceBand: classifyPerformance(average)
   };
+}
+
+/**
+ * The same summary, plus a final that respects grading period weights.
+ *
+ * Why this is a separate function rather than an optional argument to
+ * `calculateGradeSummary`: the unweighted number is still the right answer in
+ * most places (a student's overall standing across every course, the at-risk
+ * score, the dashboard). Weighting is a property of *one section's* gradebook,
+ * where a term is divided into periods that a school has decided count for
+ * different amounts. Threading an optional map through the function everything
+ * calls would put the burden on every caller to know that.
+ *
+ * The mechanics that matter:
+ *
+ * Each period's percentage is computed *within the period* and only then
+ * combined by weight. That is not the same as weighting individual assignments,
+ * and the difference is the entire point: a 10-point quiz and a 200-point exam
+ * in the same period contribute proportionally to that period, but a period
+ * worth 20% cannot exceed 20% of the final no matter how many points it holds.
+ *
+ * A period with no scored work is dropped and its weight redistributed across
+ * the rest. The alternative — treating it as zero — would show a student who
+ * has done everything asked of them so far a failing grade for a term that has
+ * not happened yet, which is the single most alarming thing a gradebook can do.
+ *
+ * Work with no `gradingPeriodId`, or with one that has no weight, is not
+ * silently dropped; it is collected under the empty-string key and reported in
+ * the breakdown so it is visible rather than missing. `Assignment.gradingPeriodId`
+ * is optional, so this is a real state and not a defensive branch.
+ */
+export function calculateWeightedGradeSummary(
+  scores: ScoreRecord[],
+  weights: Map<string, number>
+): WeightedGradeSummary {
+  const flat = calculateGradeSummary(scores);
+
+  if (weights.size === 0) {
+    return { ...flat, weightedAverage: flat.average, periods: [] };
+  }
+
+  const byPeriod = new Map<string, ScoreRecord[]>();
+  for (const score of scores) {
+    const key = score.gradingPeriodId ?? "";
+    const bucket = byPeriod.get(key);
+    if (bucket) bucket.push(score);
+    else byPeriod.set(key, [score]);
+  }
+
+  const periods: WeightedPeriodBreakdown[] = [];
+  for (const [gradingPeriodId, periodScores] of byPeriod) {
+    const summary = calculateGradeSummary(periodScores);
+    periods.push({
+      gradingPeriodId,
+      weight: weights.get(gradingPeriodId) ?? 0,
+      average: summary.average,
+      earnedPoints: summary.earnedPoints,
+      possiblePoints: summary.possiblePoints
+    });
+  }
+  periods.sort((a, b) => a.gradingPeriodId.localeCompare(b.gradingPeriodId));
+
+  const scored = periods.filter((period) => period.average !== null && period.weight > 0);
+  const totalWeight = scored.reduce((sum, period) => sum + period.weight, 0);
+
+  /*
+   * No weighted period has any scored work yet. Falling back to the flat
+   * average is the honest answer: it is the number the rest of the app already
+   * shows, and inventing a weighted null here would blank a gradebook that has
+   * perfectly good marks in an unweighted period.
+   */
+  if (totalWeight === 0) {
+    return { ...flat, weightedAverage: flat.average, periods };
+  }
+
+  const weighted = scored.reduce((sum, period) => sum + (period.average ?? 0) * period.weight, 0) / totalWeight;
+  return { ...flat, weightedAverage: weighted, periods };
 }
 
 export function calculateClassAverage(studentSummaries: GradeSummary[]): number | null {
