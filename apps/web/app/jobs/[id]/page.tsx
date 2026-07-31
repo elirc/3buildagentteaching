@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Card, CardHeader, JsonBlock, PageHeader, Stat } from "@agentic-edu/ui";
 import { prisma } from "@agentic-edu/db";
 import { AgentPanel } from "@/components/agent-panel";
+import { getRunnableAgents } from "@/lib/agent-availability";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime } from "@/lib/format";
 import { deadLetterBackgroundJob, retryBackgroundJob, runFailedJobInvestigationAgent } from "@/lib/actions";
@@ -11,6 +12,7 @@ import { getActorCapabilities } from "@/lib/capabilities";
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { can } = await getActorCapabilities();
+  const runnable = await getRunnableAgents();
   const job = await prisma.backgroundJob.findUnique({ where: { id } });
   if (!job) notFound();
   const [latestRun, audits, logs] = await Promise.all([
@@ -51,6 +53,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           </Card>
           <AgentPanel
             title="Failed Job Investigation Panel"
+            available={runnable.has("FailedJobInvestigation")}
             run={latestRun}
             action={
               can("agent:run") ? (

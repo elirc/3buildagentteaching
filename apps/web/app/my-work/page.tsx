@@ -4,6 +4,7 @@ import { prisma } from "@agentic-edu/db";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { StatusBadge } from "@/components/status-badge";
 import { AgentPanel } from "@/components/agent-panel";
+import { getRunnableAgents } from "@/lib/agent-availability";
 import { getActorCapabilities } from "@/lib/capabilities";
 import { formatDate } from "@/lib/format";
 import { runTeacherWorkloadAgent } from "@/lib/actions";
@@ -23,6 +24,7 @@ export default async function MyWorkPage({
 }) {
   const params = (await searchParams) ?? {};
   const { actor, can } = await getActorCapabilities();
+  const runnable = await getRunnableAgents();
 
   const isOperator = actor.role === "Admin" || actor.role === "SchoolManager";
   if (!actor.teacherId && !isOperator) {
@@ -198,6 +200,7 @@ export default async function MyWorkPage({
 
           <AgentPanel
             title="Teacher Workload Insight Agent"
+            available={runnable.has("TeacherWorkloadInsight")}
             action={
               can("agent:run", { teacherId }) ? (
                 <ActionForm action={runTeacherWorkloadAgent}>

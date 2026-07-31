@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Badge, Card, CardHeader, DataTable, Field, PageHeader, Stat } from "@agentic-edu/ui";
 import { getTeacherProfile } from "@agentic-edu/application";
 import { AgentPanel } from "@/components/agent-panel";
+import { getRunnableAgents } from "@/lib/agent-availability";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime } from "@/lib/format";
 import { runTeacherWorkloadAgent, updateTeacher } from "@/lib/actions";
@@ -13,6 +14,7 @@ export default async function TeacherDetailPage({ params }: { params: Promise<{ 
   if (denied) return denied;
 
   const { id } = await params;
+  const runnable = await getRunnableAgents();
   const profile = await getTeacherProfile(id);
   if (!profile) notFound();
   const { activeSections, audits, latestRun, studentIds, teacher, ungraded, workload } = profile;
@@ -100,6 +102,7 @@ export default async function TeacherDetailPage({ params }: { params: Promise<{ 
 
           <AgentPanel
             title="Teacher Workload Agent Panel"
+            available={runnable.has("TeacherWorkloadInsight")}
             run={latestRun}
             action={
               <ActionForm action={runTeacherWorkloadAgent}>

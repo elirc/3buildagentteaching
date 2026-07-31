@@ -16,12 +16,14 @@ import {
 } from "@/lib/actions";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { guardStaffRecord } from "@/components/route-guard";
+import { getRunnableAgents } from "@/lib/agent-availability";
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const denied = await guardStaffRecord();
   if (denied) return denied;
 
   const { id } = await params;
+  const runnable = await getRunnableAgents();
   const profile = await getStudentProfile(id);
   if (!profile) notFound();
   const { advisors, attendanceSummary, audits, gradeSummary, guardianDraftRun, progressRun, risk, riskRun, student, successReviewRun } = profile;
@@ -247,21 +249,25 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
 
           <AgentPanel
             title="Student Progress Agent Panel"
+            available={runnable.has("StudentProgressSummary")}
             run={progressRun}
             action={<ActionForm action={runStudentProgressAgent}><input type="hidden" name="studentId" value={student.id} /><SubmitButton variant="primary">Run progress agent</SubmitButton></ActionForm>}
           />
           <AgentPanel
             title="At-Risk Detection Agent Panel"
+            available={runnable.has("AtRiskStudentDetection")}
             run={riskRun}
             action={<ActionForm action={runAtRiskAgent}><input type="hidden" name="studentId" value={student.id} /><SubmitButton variant="primary">Run risk agent</SubmitButton></ActionForm>}
           />
           <AgentPanel
             title="Guardian Communication Draft Agent"
+            available={runnable.has("GuardianCommunicationDraft")}
             run={guardianDraftRun}
             action={<ActionForm action={runGuardianCommunicationDraftAgent}><input type="hidden" name="studentId" value={student.id} /><SubmitButton variant="secondary">Draft guardian message</SubmitButton></ActionForm>}
           />
           <AgentPanel
             title="Student Success Review Agent"
+            available={runnable.has("StudentSuccessReview")}
             run={successReviewRun}
             action={<ActionForm action={runStudentSuccessReviewAgent}><input type="hidden" name="studentId" value={student.id} /><SubmitButton variant="secondary">Run success review</SubmitButton></ActionForm>}
           />
