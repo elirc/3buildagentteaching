@@ -25,11 +25,13 @@ import {
   attendanceStatusSchema,
   classSectionSchema,
   courseSchema,
+  guardianContactSchema,
   guardianRelationshipSchema,
   interventionPlanSchema,
   interventionStatusSchema,
   logRetentionDaysSchema,
   recommendationDecisionSchema,
+  studentCreateSchema,
   studentSchema,
   supportNoteSchema,
   teacherSchema
@@ -108,7 +110,7 @@ export async function updateTeacher(_previous: FormState, formData: FormData): P
 export async function createStudent(_previous: FormState, formData: FormData): Promise<FormState> {
   const result = await runAction(async () => {
     const actor = await getCurrentActor();
-    const student = await studentService.createStudent(actor, parseStudent(formData));
+    const student = await studentService.createStudent(actor, parseNewStudent(formData));
     revalidatePath("/students");
     return student;
   });
@@ -590,6 +592,47 @@ export async function linkGuardianToStudent(_previous: FormState, formData: Form
   });
 }
 
+export async function addGuardianToStudent(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const studentId = stringValue(formData, "studentId");
+    const contact = guardianContactSchema.parse({
+      name: stringValue(formData, "guardianName"),
+      email: stringValue(formData, "guardianEmail")
+    });
+    const link = await academicOperationsService.addGuardianToStudent(actor, {
+      studentId,
+      name: contact.name,
+      email: contact.email,
+      relationship: guardianRelationshipSchema.parse(stringValue(formData, "relationship")),
+      isPrimary: formData.get("isPrimary") === "on",
+      receivesDigest: formData.get("receivesDigest") === "on"
+    });
+    revalidatePath(`/students/${studentId}`);
+    revalidatePath("/guardians");
+    return link;
+  });
+}
+
+export async function setPrimaryGuardian(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const link = await academicOperationsService.setPrimaryGuardian(actor, stringValue(formData, "linkId"));
+    revalidatePath(`/students/${link.studentId}`);
+    return link;
+  });
+}
+
+export async function unlinkGuardianFromStudent(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const link = await academicOperationsService.unlinkGuardianFromStudent(actor, stringValue(formData, "linkId"));
+    revalidatePath(`/students/${link.studentId}`);
+    revalidatePath("/guardians");
+    return link;
+  });
+}
+
 export async function createRubric(_previous: FormState, formData: FormData): Promise<FormState> {
   return runAction(async () => {
     const actor = await getCurrentActor();
@@ -786,8 +829,8 @@ function parseTeacher(formData: FormData) {
   });
 }
 
-function parseStudent(formData: FormData) {
-  return studentSchema.parse({
+function studentFields(formData: FormData) {
+  return {
     userId: optionalString(formData, "userId"),
     firstName: stringValue(formData, "firstName"),
     lastName: stringValue(formData, "lastName"),
@@ -795,9 +838,26 @@ function parseStudent(formData: FormData) {
     gradeLevel: numberValue(formData, "gradeLevel"),
     enrollmentStatus: stringValue(formData, "enrollmentStatus"),
     studentNumber: stringValue(formData, "studentNumber"),
-    guardianName: stringValue(formData, "guardianName"),
-    guardianEmail: stringValue(formData, "guardianEmail"),
     advisorId: optionalString(formData, "advisorId")
+  };
+}
+
+function parseStudent(formData: FormData) {
+  return studentSchema.parse(studentFields(formData));
+}
+
+/**
+ * Create takes a guardian; update does not. See studentCreateSchema — the edit
+ * form no longer carries guardian fields at all, so an edit cannot silently
+ * overwrite a guardian record with whatever was in a stale form.
+ */
+function parseNewStudent(formData: FormData) {
+  return studentCreateSchema.parse({
+    ...studentFields(formData),
+    primaryGuardian: {
+      name: stringValue(formData, "guardianName"),
+      email: stringValue(formData, "guardianEmail")
+    }
   });
 }
 

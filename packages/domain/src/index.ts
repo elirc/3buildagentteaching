@@ -4,6 +4,7 @@ export * from "./assignments";
 export * from "./attendance";
 export * from "./enrollment";
 export * from "./grades";
+export * from "./guardians";
 export * from "./jobs";
 export * from "./log-retention";
 export * from "./notification-routing";

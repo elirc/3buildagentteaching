@@ -1,6 +1,7 @@
 import { Prisma, prisma } from "@agentic-edu/db";
 import {
   canTransitionApproval,
+  decideGuardianUnlink,
   nextNotificationStatusAfterRead,
   validateAcademicTerm,
   validateGradingPeriod
@@ -12,10 +13,28 @@ import type {
   NotificationChannel,
   NotificationType
 } from "@agentic-edu/shared";
-import { createAuditEvent } from "../audit";
+import { createAuditEvent, type PrismaTransaction } from "../audit";
 import { assertCan, type ActorContext } from "../context";
 import { AppError } from "../errors";
 import { withServiceLogging } from "../logging";
+import { findOrCreateGuardian } from "./student-service";
+
+/**
+ * Enforces "exactly one primary guardian per student" by demoting the others.
+ *
+ * Postgres can express this as a partial unique index
+ * (`WHERE "isPrimary"`), and Prisma's schema language cannot — it would need a
+ * hand-written migration, and this repo uses `db push`. Enforcing it in the
+ * service instead is the honest trade: it holds as long as every write goes
+ * through these methods, which is the same assumption the rest of the
+ * authorization model already makes.
+ */
+async function demoteOtherPrimaries(tx: PrismaTransaction, studentId: string, keepLinkId: string) {
+  await tx.studentGuardian.updateMany({
+    where: { studentId, isPrimary: true, id: { not: keepLinkId } },
+    data: { isPrimary: false }
+  });
+}
 
 export interface AcademicTermCreateInput {
   name: string;
@@ -137,12 +156,145 @@ export const academicOperationsService = withServiceLogging("academic-operations
           emergencyContact: input.emergencyContact
         }
       });
+      if (input.isPrimary) await demoteOtherPrimaries(tx, input.studentId, link.id);
       await createAuditEvent(tx, {
         actorUserId: actor.id,
         action: "studentGuardian.linked",
         entityType: "StudentGuardian",
         entityId: link.id,
         after: link
+      });
+      return link;
+    });
+  },
+
+  /**
+   * Adds a guardian to a student from the student's own page, by email.
+   *
+   * Deliberately one action rather than the two-step "create the guardian on
+   * /guardians, then come back and link it". Two steps is how a half-finished
+   * guardian with no student ends up in the table, and the person filling this
+   * in is thinking about one student, not about the guardian directory.
+   */
+  async addGuardianToStudent(
+    actor: ActorContext,
+    input: {
+      studentId: string;
+      name: string;
+      email: string;
+      relationship: GuardianRelationship;
+      isPrimary: boolean;
+      receivesDigest: boolean;
+    }
+  ) {
+    assertCan(actor, "guardian:manage", { studentId: input.studentId });
+
+    return prisma.$transaction(async (tx) => {
+      const student = await tx.student.findUniqueOrThrow({ where: { id: input.studentId } });
+      const guardian = await findOrCreateGuardian(tx, {
+        email: input.email,
+        name: input.name,
+        fallbackLastName: student.lastName
+      });
+
+      const existing = await tx.studentGuardian.findUnique({
+        where: { studentId_guardianId: { studentId: input.studentId, guardianId: guardian.id } }
+      });
+      if (existing) {
+        throw new AppError("CONFLICT", `${guardian.firstName} ${guardian.lastName} is already linked to this student.`, {
+          studentId: input.studentId,
+          guardianId: guardian.id
+        });
+      }
+
+      const link = await tx.studentGuardian.create({
+        data: {
+          studentId: input.studentId,
+          guardianId: guardian.id,
+          relationship: input.relationship,
+          isPrimary: input.isPrimary,
+          receivesDigest: input.receivesDigest,
+          emergencyContact: false
+        }
+      });
+      if (input.isPrimary) await demoteOtherPrimaries(tx, input.studentId, link.id);
+
+      await createAuditEvent(tx, {
+        actorUserId: actor.id,
+        action: "studentGuardian.linked",
+        entityType: "StudentGuardian",
+        entityId: link.id,
+        after: { ...link, guardianEmail: guardian.email }
+      });
+      return link;
+    });
+  },
+
+  /** Promotes one link to primary and demotes whichever one held it. */
+  async setPrimaryGuardian(actor: ActorContext, linkId: string) {
+    return prisma.$transaction(async (tx) => {
+      const link = await tx.studentGuardian.findUniqueOrThrow({ where: { id: linkId } });
+      assertCan(actor, "guardian:manage", { studentId: link.studentId });
+
+      const updated = await tx.studentGuardian.update({ where: { id: linkId }, data: { isPrimary: true } });
+      await demoteOtherPrimaries(tx, link.studentId, linkId);
+
+      await createAuditEvent(tx, {
+        actorUserId: actor.id,
+        action: "studentGuardian.primaryChanged",
+        entityType: "StudentGuardian",
+        entityId: linkId,
+        before: link,
+        after: updated
+      });
+      return updated;
+    });
+  },
+
+  /**
+   * Removes a guardian link, unless it is the last one.
+   *
+   * The count is taken inside the transaction rather than trusted from the page
+   * that rendered the button. A roster page showing two guardians is stating
+   * something that was true when it rendered; by the time both "Remove" buttons
+   * have been clicked it is not.
+   */
+  async unlinkGuardianFromStudent(actor: ActorContext, linkId: string) {
+    return prisma.$transaction(async (tx) => {
+      const link = await tx.studentGuardian.findUniqueOrThrow({ where: { id: linkId } });
+      assertCan(actor, "guardian:manage", { studentId: link.studentId });
+
+      const linkCount = await tx.studentGuardian.count({ where: { studentId: link.studentId } });
+      const decision = decideGuardianUnlink({ linkCount });
+      if (!decision.allowed) {
+        throw new AppError("CONFLICT", decision.reason ?? "This guardian cannot be removed.", {
+          studentId: link.studentId,
+          linkId
+        });
+      }
+
+      await tx.studentGuardian.delete({ where: { id: linkId } });
+
+      /*
+       * Removing the primary leaves the student with guardians but no primary,
+       * and buildGuardianCommunicationDraftInput now refuses to draft without
+       * one. Promoting the oldest remaining link keeps the invariant rather
+       * than leaving a hole for someone to discover when an agent fails.
+       */
+      if (link.isPrimary) {
+        const next = await tx.studentGuardian.findFirst({
+          where: { studentId: link.studentId },
+          orderBy: { createdAt: "asc" }
+        });
+        if (next) await tx.studentGuardian.update({ where: { id: next.id }, data: { isPrimary: true } });
+      }
+
+      await createAuditEvent(tx, {
+        actorUserId: actor.id,
+        action: "studentGuardian.unlinked",
+        entityType: "StudentGuardian",
+        entityId: linkId,
+        before: link
       });
       return link;
     });

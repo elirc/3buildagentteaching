@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+﻿import { createHash } from "node:crypto";
 import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -119,8 +119,6 @@ async function main() {
         gradeLevel: 9,
         enrollmentStatus: "Probation",
         studentNumber: "NS-1001",
-        guardianName: "Denise Johnson",
-        guardianEmail: "denise.johnson@guardian.example",
         advisorId: "user_advisor"
       },
       {
@@ -132,8 +130,6 @@ async function main() {
         gradeLevel: 9,
         enrollmentStatus: "Active",
         studentNumber: "NS-1002",
-        guardianName: "Harper Brooks",
-        guardianEmail: "harper.brooks@guardian.example",
         advisorId: "user_advisor"
       },
       {
@@ -145,8 +141,6 @@ async function main() {
         gradeLevel: 10,
         enrollmentStatus: "Active",
         studentNumber: "NS-1003",
-        guardianName: "Minh Nguyen",
-        guardianEmail: "minh.nguyen@guardian.example",
         advisorId: "user_advisor"
       },
       {
@@ -157,8 +151,6 @@ async function main() {
         gradeLevel: 9,
         enrollmentStatus: "Active",
         studentNumber: "NS-1004",
-        guardianName: "Priya Singh",
-        guardianEmail: "priya.singh@guardian.example",
         advisorId: "user_advisor"
       }
     ]

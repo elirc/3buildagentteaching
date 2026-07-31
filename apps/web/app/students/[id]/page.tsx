@@ -5,10 +5,13 @@ import { AgentPanel } from "@/components/agent-panel";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatDateTime, percent } from "@/lib/format";
 import {
+  addGuardianToStudent,
   runAtRiskAgent,
   runGuardianCommunicationDraftAgent,
   runStudentProgressAgent,
   runStudentSuccessReviewAgent,
+  setPrimaryGuardian,
+  unlinkGuardianFromStudent,
   updateStudent
 } from "@/lib/actions";
 import { ActionForm, SubmitButton } from "@/components/action-form";
@@ -153,8 +156,10 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                   </select>
                 </Field>
                 <Field label="Student number"><input name="studentNumber" defaultValue={student.studentNumber} required /></Field>
-                <Field label="Guardian name"><input name="guardianName" defaultValue={student.guardianName} required /></Field>
-                <Field label="Guardian email"><input name="guardianEmail" defaultValue={student.guardianEmail} type="email" required /></Field>
+                {/* Guardian name and email used to be two more inputs here.
+                    They are managed below instead: saving this form no longer
+                    rewrites a guardian record as a side effect of changing a
+                    grade level. */}
                 <Field label="Advisor">
                   <select name="advisorId" defaultValue={student.advisorId ?? ""}>
                     <option value="">None</option>
@@ -163,6 +168,80 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                 </Field>
               </div>
               <SubmitButton variant="primary">Save student</SubmitButton>
+            </ActionForm>
+          </Card>
+
+          <Card>
+            <CardHeader title="Guardians" />
+            <p className="muted">
+              The only record of who to contact about this student. The Guardian Communication Draft agent refuses to
+              draft without a primary.
+            </p>
+            <DataTable>
+              <thead><tr><th>Guardian</th><th>Email</th><th>Relationship</th><th>Digest</th><th /></tr></thead>
+              <tbody>
+                {student.guardians.map((link) => (
+                  <tr key={link.id}>
+                    <td>
+                      {link.guardian.firstName} {link.guardian.lastName}
+                      {link.isPrimary ? <> <span className="ui-badge ui-badge--good">Primary</span></> : null}
+                    </td>
+                    <td>{link.guardian.email}</td>
+                    <td>{link.relationship}</td>
+                    <td>{link.receivesDigest ? "Yes" : "No"}</td>
+                    <td className="row-actions">
+                      {link.isPrimary ? null : (
+                        <ActionForm action={setPrimaryGuardian}>
+                          <input type="hidden" name="linkId" value={link.id} />
+                          <SubmitButton variant="ghost" pendingLabel="Saving…">Make primary</SubmitButton>
+                        </ActionForm>
+                      )}
+                      {/* Rendered even when it is the only link, and disabled
+                          rather than hidden: a missing button raises "why can I
+                          not remove this?", a disabled one answers it. The
+                          service refuses regardless — the count it checks is
+                          taken inside its own transaction, not from this page. */}
+                      <ActionForm action={unlinkGuardianFromStudent}>
+                        <input type="hidden" name="linkId" value={link.id} />
+                        <SubmitButton
+                          variant="danger"
+                          pendingLabel="Removing…"
+                          disabled={student.guardians.length <= 1}
+                        >
+                          Remove
+                        </SubmitButton>
+                      </ActionForm>
+                    </td>
+                  </tr>
+                ))}
+                {student.guardians.length === 0 ? (
+                  <tr><td colSpan={5}>No guardian on record. Add one — nothing can reach this student&apos;s family without it.</td></tr>
+                ) : null}
+              </tbody>
+            </DataTable>
+
+            <ActionForm action={addGuardianToStudent} className="stack" errorPlacement="bottom">
+              <input type="hidden" name="studentId" value={student.id} />
+              <div className="form-grid">
+                <Field label="Guardian name"><input name="guardianName" required /></Field>
+                {/* An email that already exists links that guardian rather than
+                    creating a second copy of them — matched case-insensitively,
+                    because Guardian.email is unique and "D.Johnson@..." is the
+                    same person as "d.johnson@...". */}
+                <Field label="Guardian email"><input name="guardianEmail" type="email" required /></Field>
+                <Field label="Relationship">
+                  <select name="relationship" defaultValue="Guardian">
+                    <option value="Mother">Mother</option>
+                    <option value="Father">Father</option>
+                    <option value="Guardian">Guardian</option>
+                    <option value="Grandparent">Grandparent</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </Field>
+              </div>
+              <label className="ui-checkbox"><input name="isPrimary" type="checkbox" /> Primary contact</label>
+              <label className="ui-checkbox"><input name="receivesDigest" type="checkbox" defaultChecked /> Receives digest</label>
+              <SubmitButton variant="secondary">Add guardian</SubmitButton>
             </ActionForm>
           </Card>
 

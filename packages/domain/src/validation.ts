@@ -28,9 +28,30 @@ export const studentSchema = z.object({
   gradeLevel: z.number().int().min(1).max(12),
   enrollmentStatus: z.enum(["Active", "Probation", "Withdrawn", "Graduated"]),
   studentNumber: z.string().min(1),
-  guardianName: z.string().min(1),
-  guardianEmail: z.string().email(),
   advisorId: z.string().optional().nullable()
+});
+
+/**
+ * Creating a student requires a guardian; editing one does not.
+ *
+ * The asymmetry is the point. `Student.guardianName`/`guardianEmail` used to be
+ * two ordinary columns on this schema, so every edit of a student's grade level
+ * also re-submitted their guardian's email — which is how the denormalised copy
+ * drifted away from the `Guardian` record in the first place. Guardians are now
+ * edited through the guardian panel, which knows about primary links and
+ * relationships, and this schema no longer mentions them at all.
+ *
+ * They survive on *create* because a student with no guardian is a student
+ * nobody can be contacted about, and the create form is the only place where
+ * requiring one costs the user nothing.
+ */
+export const guardianContactSchema = z.object({
+  name: z.string().min(1, { message: "Guardian name is required." }),
+  email: z.string().email({ message: "A valid guardian email is required." })
+});
+
+export const studentCreateSchema = studentSchema.extend({
+  primaryGuardian: guardianContactSchema
 });
 
 export const courseSchema = z.object({
@@ -180,6 +201,8 @@ export type RecommendationDecisionInput = z.infer<typeof recommendationDecisionS
 
 export type TeacherInput = z.infer<typeof teacherSchema>;
 export type StudentInput = z.infer<typeof studentSchema>;
+export type StudentCreateInput = z.infer<typeof studentCreateSchema>;
+export type GuardianContactInput = z.infer<typeof guardianContactSchema>;
 export type CourseInput = z.infer<typeof courseSchema>;
 export type ClassSectionInput = z.infer<typeof classSectionSchema>;
 export type AssignmentInput = z.infer<typeof assignmentSchema>;

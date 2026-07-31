@@ -280,8 +280,10 @@ model Student {
   gradeLevel       Int
   enrollmentStatus StudentEnrollmentStatus
   studentNumber    String                  @unique
-  guardianName     String
-  guardianEmail    String
+  // guardianName / guardianEmail removed in US-14. Guardian contact details now
+  // live only on Guardian + StudentGuardian. They were duplicated here, both
+  // copies were writable from different screens, and nothing kept them in sync —
+  // so which address an agent drafted to depended on which screen was used last.
   advisorId        String?
   advisor          User?                   @relation("AdvisorStudents", fields: [advisorId], references: [id])
   createdAt        DateTime                @default(now())
