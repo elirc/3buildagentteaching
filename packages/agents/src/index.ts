@@ -4,6 +4,7 @@ export * from "./attendance-anomaly-agent";
 export * from "./failed-job-agent";
 export * from "./grading-consistency-agent";
 export * from "./guardian-communication-agent";
+export * from "./helpers";
 export * from "./registry";
 export * from "./student-progress-agent";
 export * from "./student-success-review-agent";
