@@ -14,4 +14,5 @@ export * from "./reports";
 export * from "./risk";
 export * from "./rubrics";
 export * from "./validation";
+export * from "./versions";
 export * from "./workload";

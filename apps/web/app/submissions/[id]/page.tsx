@@ -3,6 +3,7 @@ import { Card, CardHeader, Field, JsonBlock, PageHeader, Stat } from "@agentic-e
 import { prisma } from "@agentic-edu/db";
 import { calculatePercentage, calculateRubricScore } from "@agentic-edu/domain";
 import { AgentPanel } from "@/components/agent-panel";
+import { getRunnableAgents } from "@/lib/agent-availability";
 import { StatusBadge } from "@/components/status-badge";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { getActorCapabilities } from "@/lib/capabilities";
@@ -16,6 +17,7 @@ export default async function SubmissionDetailPage({ params }: { params: Promise
 
   const { id } = await params;
   const { can } = await getActorCapabilities();
+  const runnable = await getRunnableAgents();
 
   const submission = await prisma.submission.findUnique({
     where: { id },
@@ -86,6 +88,7 @@ export default async function SubmissionDetailPage({ params }: { params: Promise
 
           <AgentPanel
             title="Assignment Feedback Agent Panel"
+            available={runnable.has("AssignmentFeedback")}
             run={latestRun}
             action={
               can("agent:run") ? (

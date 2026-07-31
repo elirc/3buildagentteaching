@@ -3,6 +3,7 @@ import { Card, CardHeader, DataTable, Field, PageHeader, Stat } from "@agentic-e
 import { prisma } from "@agentic-edu/db";
 import { calculatePercentage } from "@agentic-edu/domain";
 import { AgentPanel } from "@/components/agent-panel";
+import { getRunnableAgents } from "@/lib/agent-availability";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, percent } from "@/lib/format";
 import { createSubmission, publishAssignment, runGradingConsistencyAgent, updateAssignment } from "@/lib/actions";
@@ -14,6 +15,7 @@ export default async function AssignmentDetailPage({ params }: { params: Promise
   if (denied) return denied;
 
   const { id } = await params;
+  const runnable = await getRunnableAgents();
   const assignment = await prisma.assignment.findUnique({
     where: { id },
     include: {
@@ -95,6 +97,7 @@ export default async function AssignmentDetailPage({ params }: { params: Promise
 
           <AgentPanel
             title="Grading Consistency Agent"
+            available={runnable.has("GradingConsistency")}
             run={gradingConsistencyRun}
             action={<ActionForm action={runGradingConsistencyAgent}><input type="hidden" name="assignmentId" value={assignment.id} /><SubmitButton variant="secondary">Run grading check</SubmitButton></ActionForm>}
           />

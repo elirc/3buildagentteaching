@@ -8,7 +8,9 @@ import {
   calculateWeightedGradeSummary,
   buildWeeklyRiskReport,
   canAcquireJobLock,
+  compareSemver,
   diffReports,
+  selectActiveVersion,
   isoWeek,
   isoWeekRange,
   weeklyReportKey,
@@ -636,6 +638,44 @@ describe("role permissions", () => {
     expect(canPerform({ id: "u", role: "SchoolManager" }, "log:manage")).toBe(false);
     expect(canPerform({ id: "u", role: "Advisor" }, "log:manage")).toBe(false);
     expect(canPerform({ id: "u", role: "Teacher" }, "log:manage")).toBe(false);
+  });
+});
+
+describe("agent version selection", () => {
+  it("orders by number, not by string", () => {
+    // The bug this exists to prevent: lexicographically "1.0.10" sorts BEFORE
+    // "1.0.9", so a string compare keeps serving the older version forever —
+    // silently, because the wrong version produces plausible output.
+    expect(compareSemver("1.0.10", "1.0.9")).toBeGreaterThan(0);
+    expect(compareSemver("1.2.0", "1.10.0")).toBeLessThan(0);
+    expect(compareSemver("2.0.0", "1.99.99")).toBeGreaterThan(0);
+    expect(compareSemver("1.0.0", "1.0.0")).toBe(0);
+  });
+
+  it("ranks a release above its own pre-releases", () => {
+    expect(compareSemver("1.0.0", "1.0.0-beta.1")).toBeGreaterThan(0);
+    expect(compareSemver("1.0.0-alpha", "1.0.0-beta")).toBeLessThan(0);
+  });
+
+  it("ignores build metadata, which semver excludes from precedence", () => {
+    expect(compareSemver("1.0.0+build.5", "1.0.0+build.9")).toBe(0);
+  });
+
+  it("picks the highest active version and ignores inactive ones", () => {
+    const manifests = [
+      { version: "1.0.9", isActive: true },
+      { version: "1.0.10", isActive: true },
+      { version: "2.0.0", isActive: false }
+    ];
+
+    // 2.0.0 is highest but switched off — that is what "deactivate to roll
+    // back" means, and it must return traffic to 1.0.10 rather than stopping.
+    expect(selectActiveVersion(manifests)?.version).toBe("1.0.10");
+  });
+
+  it("returns null when nothing is active, rather than the newest inactive row", () => {
+    expect(selectActiveVersion([{ version: "1.0.0", isActive: false }])).toBeNull();
+    expect(selectActiveVersion([])).toBeNull();
   });
 });
 

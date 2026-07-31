@@ -476,8 +476,82 @@ async function main() {
     ]
   });
 
+  /*
+   * All nine agents, not the four that used to be here.
+   *
+   * As of US-17 a missing manifest is not cosmetic — persistAgentRun refuses to
+   * run an agent that has none, so the five that were absent would simply have
+   * stopped working. `agentRegistry` satisfies Record<AgentType, ...>, and a
+   * test asserts every key in it has an active manifest, so the two sides
+   * cannot drift again.
+   *
+   * requiredPermissions is where the interesting policy lives. Note
+   * GuardianCommunicationDraft requiring notification:manage — that is what
+   * stops a Teacher drafting messages to families, expressed in data rather
+   * than in a branch somewhere.
+   */
   await prisma.agentManifest.createMany({
     data: [
+      {
+        id: "manifest_attendance_anomaly_v1",
+        agentType: "AttendanceAnomaly",
+        version: "1.0.0",
+        name: "Attendance Anomaly Agent",
+        description: "Detects absence streaks and issue-point spikes against a student's own baseline.",
+        supportedTargets: ["Student", "ClassSection"],
+        requiredPermissions: ["agent:run"],
+        inputSchema: { version: "1.0.0", required: ["targetType", "attendanceSummary"] },
+        outputSchema: { version: "1.0.0", required: ["anomalyDetected", "recommendedActions"] },
+        isActive: true
+      },
+      {
+        id: "manifest_teacher_workload_v1",
+        agentType: "TeacherWorkloadInsight",
+        version: "1.0.0",
+        name: "Teacher Workload Insight Agent",
+        description: "Scores grading backlog pressure and surfaces workload indicators.",
+        supportedTargets: ["Teacher"],
+        requiredPermissions: ["agent:run"],
+        inputSchema: { version: "1.0.0", required: ["teacherId", "ungradedSubmissionCount"] },
+        outputSchema: { version: "1.0.0", required: ["workloadScore", "recommendedActions"] },
+        isActive: true
+      },
+      {
+        id: "manifest_failed_job_v1",
+        agentType: "FailedJobInvestigation",
+        version: "1.0.0",
+        name: "Failed Job Investigation Agent",
+        description: "Correlates a failed job with structured logs and proposes a remediation.",
+        supportedTargets: ["Job"],
+        requiredPermissions: ["agent:run", "job:retry"],
+        inputSchema: { version: "1.0.0", required: ["job", "relatedLogs"] },
+        outputSchema: { version: "1.0.0", required: ["probableCause", "recommendedActions"] },
+        isActive: true
+      },
+      {
+        id: "manifest_assignment_feedback_v1",
+        agentType: "AssignmentFeedback",
+        version: "1.0.0",
+        name: "Assignment Feedback Agent",
+        description: "Drafts teacher-reviewable feedback against an assignment's rubric criteria.",
+        supportedTargets: ["Submission"],
+        requiredPermissions: ["agent:run", "submission:grade"],
+        inputSchema: { version: "1.0.0", required: ["submission", "rubricFields"] },
+        outputSchema: { version: "1.0.0", required: ["studentFacingFeedback", "teacherFacingGradingNotes"] },
+        isActive: true
+      },
+      {
+        id: "manifest_at_risk_v1",
+        agentType: "AtRiskStudentDetection",
+        version: "1.0.0",
+        name: "At-Risk Student Detection Agent",
+        description: "Scores academic, attendance and engagement risk and routes an owner by severity.",
+        supportedTargets: ["Student"],
+        requiredPermissions: ["agent:run"],
+        inputSchema: { version: "1.0.0", required: ["gradeSummary", "attendanceSummary"] },
+        outputSchema: { version: "1.0.0", required: ["riskLevel", "escalationRecommendation"] },
+        isActive: true
+      },
       {
         id: "manifest_student_progress_v1",
         agentType: "StudentProgressSummary",

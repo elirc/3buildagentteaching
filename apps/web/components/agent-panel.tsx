@@ -5,6 +5,7 @@ export function AgentPanel({
   title,
   run,
   action,
+  available = true,
   children
 }: {
   title: string;
@@ -16,13 +17,32 @@ export function AgentPanel({
     output: unknown;
   } | null;
   action?: React.ReactNode;
+  /**
+   * False when this agent has no active manifest (US-17).
+   *
+   * The control is replaced with an explanation rather than silently removed:
+   * an operator who deactivated the agent should recognise the consequence of
+   * what they did, and everyone else should learn why the button they remember
+   * is gone. A vanished button is a support ticket.
+   */
+  available?: boolean;
   children?: React.ReactNode;
 }) {
   return (
     <Card>
-      <CardHeader title={title} eyebrow="Mock agent" actions={action}>
+      <CardHeader
+        title={title}
+        eyebrow="Mock agent"
+        actions={available ? action : <span className="ui-badge">Deactivated</span>}
+      >
         Deterministic local analysis with persisted input, output, confidence, and trace.
       </CardHeader>
+      {available ? null : (
+        <p className="muted">
+          This agent has no active manifest, so it will refuse to run. An admin can re-activate it on{" "}
+          <a href="/agent-ops">Agent Ops</a>.
+        </p>
+      )}
       {children}
       {run ? (
         <div className="stack">

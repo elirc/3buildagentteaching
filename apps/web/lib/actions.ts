@@ -635,6 +635,22 @@ export async function unlinkGuardianFromStudent(_previous: FormState, formData: 
   });
 }
 
+export async function setManifestActive(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const manifest = await agentOperationsService.setManifestActive(
+      actor,
+      stringValue(formData, "manifestId"),
+      stringValue(formData, "isActive") === "true"
+    );
+    revalidatePath("/agent-ops");
+    // Run buttons across the app are gated on the manifest being active, so
+    // every page that offers one is now stale.
+    revalidatePath("/", "layout");
+    return manifest;
+  });
+}
+
 export async function createRubric(_previous: FormState, formData: FormData): Promise<FormState> {
   return runAction(async () => {
     const actor = await getCurrentActor();

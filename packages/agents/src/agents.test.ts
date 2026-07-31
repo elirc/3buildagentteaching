@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { agentRegistry } from "./registry";
 import {
   assignmentFeedbackAgent,
   atRiskStudentDetectionAgent,
@@ -263,5 +266,36 @@ describe("mock agent heuristics", () => {
 
     expect(result.output.needsHumanApproval).toBe(true);
     expect(result.output.subagentSummaries).toHaveLength(3);
+  });
+});
+
+describe("registry and manifests cannot drift", () => {
+  /*
+   * The code side is exhaustive by construction: agentRegistry is declared
+   * `satisfies Record<AgentType, AgentDefinition>`, so adding an AgentType
+   * without an implementation does not compile.
+   *
+   * The *data* side has no such protection. AgentManifest rows are seeded, and
+   * as of US-17 an agent with no active manifest refuses to run. So an agent
+   * can be perfectly implemented, fully typed, and dead in production because
+   * nobody added a row. This test reads the seed file and asserts the two sides
+   * agree — the cheapest available stand-in for a constraint the database
+   * cannot express.
+   */
+  const seed = readFileSync(resolve(__dirname, "../../db/prisma/seed.ts"), "utf8");
+
+  it("seeds an active manifest for every registered agent", () => {
+    const missing = Object.keys(agentRegistry).filter(
+      (agentType) => !new RegExp(`agentType:\\s*"${agentType}"`).test(seed)
+    );
+
+    expect(missing).toEqual([]);
+  });
+
+  it("seeds no manifest for an agent that does not exist", () => {
+    const seeded = [...seed.matchAll(/agentType:\s*"(\w+)",\s*\n\s*version:/g)].map((match) => match[1]);
+    const known = new Set(Object.keys(agentRegistry));
+
+    expect(seeded.filter((agentType) => agentType && !known.has(agentType))).toEqual([]);
   });
 });

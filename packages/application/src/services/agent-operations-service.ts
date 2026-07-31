@@ -18,6 +18,38 @@ export interface AgentManifestInput {
 }
 
 export const agentOperationsService = withServiceLogging("agent-operations-service", {
+  /**
+   * Turns an agent version on or off without a deploy.
+   *
+   * This is the operational payoff of US-17: `isActive` used to change nothing,
+   * so an agent producing bad output could only be stopped by shipping code.
+   * Now deactivating the only active manifest makes `persistAgentRun` refuse,
+   * and the UI stops offering the button.
+   *
+   * Deactivating one of several versions is a rollback: `selectActiveVersion`
+   * picks the highest *active* one, so switching 2.0.0 off returns traffic to
+   * 1.9.0 rather than stopping the agent.
+   */
+  async setManifestActive(actor: ActorContext, manifestId: string, isActive: boolean) {
+    assertCan(actor, "agentManifest:manage");
+    return prisma.$transaction(async (tx) => {
+      const before = await tx.agentManifest.findUniqueOrThrow({ where: { id: manifestId } });
+      const manifest = await tx.agentManifest.update({ where: { id: manifestId }, data: { isActive } });
+      await createAuditEvent(tx, {
+        actorUserId: actor.id,
+        action: isActive ? "agentManifest.activated" : "agentManifest.deactivated",
+        entityType: "AgentManifest",
+        entityId: manifest.id,
+        before,
+        after: manifest,
+        // The agent type matters more than the row id when someone is reading
+        // the audit log to answer "why did that agent stop running".
+        metadata: { agentType: manifest.agentType, version: manifest.version }
+      });
+      return manifest;
+    });
+  },
+
   async upsertManifest(actor: ActorContext, input: AgentManifestInput) {
     assertCan(actor, "agentManifest:manage");
     return prisma.$transaction(async (tx) => {
