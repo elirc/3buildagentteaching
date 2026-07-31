@@ -1,4 +1,5 @@
 export * from "./assignment-feedback-agent";
+export * from "./evaluation";
 export * from "./at-risk-agent";
 export * from "./attendance-anomaly-agent";
 export * from "./failed-job-agent";
