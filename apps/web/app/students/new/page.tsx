@@ -25,8 +25,13 @@ export default async function NewStudentPage() {
               </select>
             </Field>
             <Field label="Student number"><input name="studentNumber" required /></Field>
-            <Field label="Guardian name"><input name="guardianName" required /></Field>
-            <Field label="Guardian email"><input name="guardianEmail" type="email" required /></Field>
+            {/* Required, and the only place guardian details are collected on a
+                student form. A student with no guardian is a student the school
+                cannot contact, so the link is created in the same transaction
+                as the student. If this email already belongs to a guardian, that
+                existing record is linked rather than duplicated. */}
+            <Field label="Primary guardian name"><input name="guardianName" required /></Field>
+            <Field label="Primary guardian email"><input name="guardianEmail" type="email" required /></Field>
             <Field label="Advisor">
               <select name="advisorId" defaultValue="">
                 <option value="">None</option>
