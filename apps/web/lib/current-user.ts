@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { prisma } from "@agentic-edu/db";
 import type { ActorContext } from "@agentic-edu/application";
@@ -17,7 +19,22 @@ export async function listSwitchableUsers() {
   return prisma.user.findMany({ orderBy: [{ role: "asc" }, { name: "asc" }] });
 }
 
-export async function getCurrentActor(): Promise<ActorContext> {
+/**
+ * Resolves the acting user and stamps the request with a correlation id.
+ *
+ * Wrapped in React's `cache` for one specific reason: a single page render
+ * calls this more than once — the route guard asks who you are, then the page
+ * asks again, then each Server Action asks a third time. Without memoisation
+ * every one of those would mint a *different* `requestId`, and the field would
+ * be worse than useless: it would look like a correlation id while correlating
+ * nothing. `cache` scopes one result to one render pass, so every log line
+ * written while producing a page shares an id, and the /logs filter on it
+ * actually reassembles the request.
+ *
+ * A Server Action invocation is a separate pass and gets its own id, which is
+ * correct — it is a separate request.
+ */
+export const getCurrentActor = cache(async function getCurrentActor(): Promise<ActorContext> {
   const user = await getCurrentUser();
   if (!user) {
     throw new Error("No development user is available.");
@@ -39,6 +56,7 @@ export async function getCurrentActor(): Promise<ActorContext> {
     teacherId: teacher?.id ?? null,
     studentId: student?.id ?? null,
     advisedStudentIds: advisedStudents.map((item) => item.id),
-    guardianStudentIds: guardianLinks.map((item) => item.studentId)
+    guardianStudentIds: guardianLinks.map((item) => item.studentId),
+    requestId: randomUUID()
   };
-}
+});
