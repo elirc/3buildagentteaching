@@ -24,6 +24,7 @@ export * from "./services/assignment-service";
 export * from "./services/attendance-service";
 export * from "./services/enrollment-service";
 export * from "./services/job-service";
+export * from "./services/log-service";
 export * from "./services/notify-service";
 export * from "./services/student-service";
 export * from "./services/support-service";
