@@ -704,6 +704,72 @@ describe("workerService with real handlers", () => {
   });
 });
 
+describe("term close-out", () => {
+  const seedPostmortemManifest = () =>
+    prisma.agentManifest.create({
+      data: {
+        agentType: "TermPostmortem",
+        version: "1.0.0",
+        name: "Term Postmortem Agent",
+        description: "Test manifest",
+        supportedTargets: ["AcademicTerm"],
+        requiredPermissions: ["agent:run", "term:manage"],
+        inputSchema: {},
+        outputSchema: {},
+        isActive: true
+      }
+    });
+
+  it("refuses to close while submissions are ungraded, then closes once they are graded", async () => {
+    await seedPostmortemManifest();
+    const teacher = await makeTeacher();
+    const term = await makeTerm({ id: "term_closeout", name: "Closeout Term" });
+    const section = await makeSection(teacher.id, { academicTermId: term.id });
+    const student = await makeStudent();
+    await enrollmentService.enrollStudent(ADMIN, { studentId: student.id, classSectionId: section.id, allowWaitlist: false });
+    const assignment = await makeAssignment(section.id, teacher.id);
+
+    const submission = await prisma.submission.create({
+      data: { assignmentId: assignment.id, studentId: student.id, status: "Submitted", submittedAt: new Date() }
+    });
+
+    await expect(academicOperationsService.closeTerm(ADMIN, term.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    // Refused means nothing happened: no status change and no postmortem run.
+    expect((await prisma.academicTerm.findUniqueOrThrow({ where: { id: term.id } })).status).toBe("Active");
+    expect(await prisma.agentRun.count({ where: { agentType: "TermPostmortem" } })).toBe(0);
+
+    await prisma.submission.update({ where: { id: submission.id }, data: { status: "Graded", score: 18 } });
+
+    const result = await academicOperationsService.closeTerm(ADMIN, term.id);
+
+    expect(result.term.status).toBe("Closed");
+    expect(await prisma.agentRun.count({ where: { agentType: "TermPostmortem", targetId: term.id } })).toBe(1);
+    expect(await prisma.auditEvent.count({ where: { action: "term.closed" } })).toBe(1);
+  });
+
+  it("refuses a second close of an already-closed term", async () => {
+    await seedPostmortemManifest();
+    const term = await makeTerm({ id: "term_already_closed", name: "Already Closed" });
+    await prisma.academicTerm.update({ where: { id: term.id }, data: { status: "Closed" } });
+
+    // Closing runs the agent, so an idempotent close would produce a second
+    // report of a term that has not changed.
+    await expect(academicOperationsService.closeTerm(ADMIN, term.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await prisma.agentRun.count({ where: { agentType: "TermPostmortem" } })).toBe(0);
+  });
+
+  it("refuses the postmortem for an actor without term:manage", async () => {
+    await seedPostmortemManifest();
+    const term = await makeTerm({ id: "term_perm", name: "Permission Term" });
+
+    // The manifest requires agent:run AND term:manage. A Teacher holds the
+    // first and not the second, so the gate refuses.
+    await expect(
+      agentRunService.runTermPostmortemAgent({ id: "user_teacher", role: "Teacher" }, term.id)
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
 describe("sub-agent runs are persisted as a tree", () => {
   const manifestFor = (agentType: "StudentSuccessReview" | "StudentProgressSummary" | "AtRiskStudentDetection" | "AttendanceAnomaly") =>
     prisma.agentManifest.create({

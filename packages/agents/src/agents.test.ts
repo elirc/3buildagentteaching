@@ -12,7 +12,8 @@ import {
   guardianCommunicationDraftAgent,
   studentProgressSummaryAgent,
   studentSuccessReviewAgent,
-  teacherWorkloadInsightAgent
+  teacherWorkloadInsightAgent,
+  termPostmortemAgent
 } from "./index";
 
 /**
@@ -281,6 +282,85 @@ describe("mock agent heuristics", () => {
 
     expect(result.output.needsHumanApproval).toBe(true);
     expect(result.output.subagentSummaries).toHaveLength(3);
+  });
+});
+
+describe("term postmortem agent", () => {
+  const analysis = (overrides: Partial<Parameters<typeof termPostmortemAgent.run>[0]["analysis"]> = {}) => ({
+    sectionHighlights: [
+      { sectionId: "section_algebra_a", headline: "MATH-101: class average 64%", average: 64 },
+      { sectionId: "section_biology_a", headline: "SCI-110: class average 82%", average: 82 }
+    ],
+    sectionsNeedingReview: [{ sectionId: "section_algebra_a", reason: "class average 64% is at or below 70%" }],
+    interventionEffectiveness: { completed: 1, abandoned: 1, stillActive: 2 },
+    staffingObservations: [],
+    dataQualityIssues: ["4 submission(s) are ungraded at term end."],
+    recommendationAcceptanceRate: 0.5,
+    totalUngraded: 4,
+    riskCounts: { Low: 20, Medium: 8, High: 3, Critical: 1 },
+    ...overrides
+  });
+
+  it("blocks the seeded Fall 2026 shape and names the section and the ungraded work", () => {
+    const result = termPostmortemAgent.run({
+      termName: "Fall 2026",
+      termStatus: "Active",
+      analysis: analysis(),
+      now: FIXED_NOW
+    });
+
+    // Blocked, not NeedsWork: ungraded work means the grades are not final.
+    expect(result.output.nextTermReadiness).toBe("Blocked");
+    expect(result.output.sectionsNeedingReview[0]?.sectionId).toBe("section_algebra_a");
+    expect(result.output.dataQualityIssues.join(" ")).toContain("ungraded");
+    expect(result.output.recommendationsForNextTerm[0]).toContain("ungraded");
+  });
+
+  it("drops confidence below 60 for a term with almost nothing in it, without throwing", () => {
+    const result = termPostmortemAgent.run({
+      termName: "Summer 2027",
+      termStatus: "Active",
+      analysis: analysis({
+        sectionHighlights: [{ sectionId: "s1", headline: "ART-100: no graded work", average: null }],
+        sectionsNeedingReview: [],
+        interventionEffectiveness: { completed: 0, abandoned: 0, stillActive: 0 },
+        dataQualityIssues: [],
+        recommendationAcceptanceRate: null,
+        totalUngraded: 0
+      }),
+      now: FIXED_NOW
+    });
+
+    /*
+     * An empty term is not an error — it is a term nothing happened in, and the
+     * agent has to say so rather than throw. What it must not do is sound
+     * certain: the confidence is what tells a reader how much was behind the
+     * narrative.
+     */
+    expect(result.confidenceScore).toBeLessThan(60);
+    expect(result.output.executiveSummary).toContain("too little activity");
+    expect(result.output.nextTermReadiness).toBe("Ready");
+  });
+
+  it("routes staffing to Admin, a grading backlog to Teacher, and unresolved plans to Advisor", () => {
+    const staffing = termPostmortemAgent.run({
+      termName: "T", termStatus: "Active", now: FIXED_NOW,
+      analysis: analysis({ staffingObservations: ["Nina Patel finished at workload score 74."] })
+    });
+    const backlog = termPostmortemAgent.run({
+      termName: "T", termStatus: "Active", now: FIXED_NOW,
+      analysis: analysis({ staffingObservations: [], totalUngraded: 4, interventionEffectiveness: { completed: 0, abandoned: 0, stillActive: 0 } })
+    });
+    const plans = termPostmortemAgent.run({
+      termName: "T", termStatus: "Active", now: FIXED_NOW,
+      analysis: analysis({ staffingObservations: [], totalUngraded: 0, dataQualityIssues: [], interventionEffectiveness: { completed: 0, abandoned: 0, stillActive: 2 } })
+    });
+
+    // The owner is the field that routes work into a queue. Prose about who
+    // should act is not routing — the same lesson the at-risk agent learned.
+    expect(staffing.recommendations[0]?.owner).toBe("Admin");
+    expect(backlog.recommendations[0]?.owner).toBe("Teacher");
+    expect(plans.recommendations[0]?.owner).toBe("Advisor");
   });
 });
 
