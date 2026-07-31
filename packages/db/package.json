@@ -8,6 +8,7 @@
   },
   "types": "./src/index.ts",
   "dependencies": {
+    "@agentic-edu/domain": "0.1.0",
     "@prisma/client": "^6.8.2"
   },
   "prisma": {

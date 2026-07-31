@@ -19,6 +19,7 @@
     "db:push": "prisma db push --schema packages/db/prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema packages/db/prisma/schema.prisma",
     "db:seed": "tsx packages/db/prisma/seed.ts",
+    "db:backfill:guardians": "tsx packages/db/scripts/backfill-guardians.ts",
     "db:studio": "prisma studio --schema packages/db/prisma/schema.prisma",
     "lint": "npm run lint -w apps/web",
     "test:integration": "vitest run --project integration",
