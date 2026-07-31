@@ -357,9 +357,12 @@ model ClassSection {
   course            Course             @relation(fields: [courseId], references: [id])
   teacherId         String
   teacher           Teacher            @relation(fields: [teacherId], references: [id])
-  academicTermId    String?
-  academicTerm      AcademicTerm?      @relation(fields: [academicTermId], references: [id])
-  term              String
+  // Required as of US-15, and the free-text `term String` beside it is gone.
+  // A section carried both, nothing kept them in sync, and a section could read
+  // "Spring 2027" while pointing at the Fall 2026 term row — so every date rule
+  // and every term filter could disagree with the label on the page.
+  academicTermId    String
+  academicTerm      AcademicTerm       @relation(fields: [academicTermId], references: [id])
   room              String
   schedule          Json
   capacity          Int
