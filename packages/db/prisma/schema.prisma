@@ -713,9 +713,23 @@ model AgentRun {
   createdAt       DateTime        @default(now())
   recommendations AgentRecommendation[]
 
+  /// Set on runs an orchestrating agent triggered (US-18).
+  ///
+  /// StudentSuccessReview calls three other agents. Before this they ran inline
+  /// via executeAgent, so none of them produced a row: no input snapshot, no
+  /// confidence, no trace. An advisor asked to act on the review had no way to
+  /// see what it was built from.
+  ///
+  /// Deliberately one level. Nothing here nests further, and a self-relation
+  /// that permits arbitrary depth invites a cycle the database will not stop.
+  parentRunId     String?
+  parentRun       AgentRun?       @relation("AgentRunChildren", fields: [parentRunId], references: [id])
+  childRuns       AgentRun[]      @relation("AgentRunChildren")
+
   @@index([agentType])
   @@index([targetType, targetId])
   @@index([status])
+  @@index([parentRunId])
 }
 
 model AgentManifest {
