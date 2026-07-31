@@ -1,4 +1,4 @@
-import { Card, CardHeader, DataTable, PageHeader, Stat } from "@agentic-edu/ui";
+import { Card, CardHeader, DataTable, JsonBlock, PageHeader, Stat } from "@agentic-edu/ui";
 import { getAgentOperationsOverview } from "@agentic-edu/application";
 import { agentRegistry } from "@agentic-edu/agents";
 import { selectActiveVersion } from "@agentic-edu/domain";
@@ -95,19 +95,45 @@ export default async function AgentOpsPage() {
 
       <Card>
         <CardHeader title="Agent Evaluation Results" />
+        <p className="muted">
+          The latest result per fixture, from <code>npm run agents:eval</code>. Every run inserts rather than updates, so
+          history is kept — but health is a question about the most recent run of each fixture, not about every result
+          ever recorded.
+          {overview.metrics.passRate === null
+            ? " No evaluations have been recorded yet."
+            : ` ${overview.metrics.passRate}% of ${overview.metrics.evaluatedFixtures} fixture(s) passing.`}
+        </p>
         <DataTable>
-          <thead><tr><th>Fixture</th><th>Agent</th><th>Version</th><th>Passed</th><th>Score</th><th>Created</th></tr></thead>
+          <thead><tr><th>Fixture</th><th>Agent</th><th>Version</th><th>Passed</th><th>Score</th><th>Expected vs actual</th><th>Last run</th></tr></thead>
           <tbody>
-            {overview.evaluations.map((evaluation) => (
+            {overview.latestEvaluations.map((evaluation) => (
               <tr key={evaluation.id}>
                 <td>{evaluation.fixtureName}</td>
-                <td>{evaluation.agentType}</td>
+                <td>
+                  {evaluation.agentType}
+                  {/* The badge is on the agent, not the fixture: what an
+                      operator needs to know is which agent to stop trusting. */}
+                  {overview.failingAgentTypes.has(evaluation.agentType) ? <> <span className="ui-badge ui-badge--danger">failing</span></> : null}
+                </td>
                 <td>{evaluation.version}</td>
                 <td><StatusBadge value={evaluation.passed ? "Passed" : "Failed"} /></td>
                 <td>{Math.round(evaluation.score * 100)}%</td>
+                <td>
+                  {evaluation.passed ? (
+                    <span className="muted">—</span>
+                  ) : (
+                    <details>
+                      <summary>Compare</summary>
+                      <JsonBlock value={{ expected: evaluation.expectedOutput, actual: evaluation.actualOutput }} />
+                    </details>
+                  )}
+                </td>
                 <td>{formatDateTime(evaluation.createdAt)}</td>
               </tr>
             ))}
+            {overview.latestEvaluations.length === 0 ? (
+              <tr><td colSpan={7}>No evaluations recorded. Run <code>npm run agents:eval</code>.</td></tr>
+            ) : null}
           </tbody>
         </DataTable>
       </Card>
