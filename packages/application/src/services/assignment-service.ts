@@ -5,19 +5,58 @@ import {
   canSubmitAssignment,
   determineSubmissionStatus,
   rubricRequiresTeacherReview,
+  validateAssignmentDueDate,
   validateScore
 } from "@agentic-edu/domain";
 import { AppError } from "../errors";
 import { assertCan, type ActorContext } from "../context";
-import { createAuditEvent } from "../audit";
+import { createAuditEvent, type PrismaTransaction } from "../audit";
 import { jobService } from "./job-service";
 import { notifyService } from "./notify-service";
 import { withServiceLogging } from "../logging";
+
+/**
+ * Refuses a due date outside the section's term, and a grading period that
+ * belongs to a different term.
+ *
+ * Both checks are here rather than in the form because both need a database
+ * read, and both are the kind of rule a second caller would forget. The grading
+ * period check is the less obvious of the two: the assignment form only offers
+ * periods from the right term, so the only way to reach it is a stale page or a
+ * hand-crafted POST — which is exactly the population a server-side check
+ * exists for.
+ */
+async function assertDueDateInTerm(tx: PrismaTransaction, input: AssignmentInput) {
+  const section = await tx.classSection.findUniqueOrThrow({
+    where: { id: input.classSectionId },
+    include: { academicTerm: true }
+  });
+
+  const decision = validateAssignmentDueDate(input.dueDate, section.academicTerm);
+  if (!decision.valid) {
+    throw new AppError("VALIDATION_ERROR", decision.reason ?? "Due date is outside the term.", {
+      classSectionId: input.classSectionId,
+      academicTermId: section.academicTermId
+    });
+  }
+
+  if (input.gradingPeriodId) {
+    const period = await tx.gradingPeriod.findUnique({ where: { id: input.gradingPeriodId } });
+    if (!period || period.academicTermId !== section.academicTermId) {
+      throw new AppError(
+        "VALIDATION_ERROR",
+        `That grading period does not belong to ${section.academicTerm.name}.`,
+        { gradingPeriodId: input.gradingPeriodId, academicTermId: section.academicTermId }
+      );
+    }
+  }
+}
 
 export const assignmentService = withServiceLogging("assignment-service", {
   async createAssignment(actor: ActorContext, input: AssignmentInput) {
     assertCan(actor, "assignment:create", { teacherId: input.createdByTeacherId });
     return prisma.$transaction(async (tx) => {
+      await assertDueDateInTerm(tx, input);
       const assignment = await tx.assignment.create({ data: input });
       await createAuditEvent(tx, {
         actorUserId: actor.id,
@@ -43,6 +82,7 @@ export const assignmentService = withServiceLogging("assignment-service", {
     assertCan(actor, "assignment:update", { teacherId: input.createdByTeacherId });
     return prisma.$transaction(async (tx) => {
       const before = await tx.assignment.findUniqueOrThrow({ where: { id } });
+      await assertDueDateInTerm(tx, input);
       const assignment = await tx.assignment.update({ where: { id }, data: input });
       await createAuditEvent(tx, {
         actorUserId: actor.id,

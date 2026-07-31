@@ -333,7 +333,7 @@ async function buildStudentProgressInput(studentId: string, role: string): Promi
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: studentId },
     include: {
-      enrollments: { include: { classSection: { include: { course: true } } } },
+      enrollments: { include: { classSection: { include: { course: true, academicTerm: true } } } },
       submissions: { include: { assignment: true } },
       attendanceRecords: true,
       supportNotes: true,
@@ -358,7 +358,7 @@ async function buildStudentProgressInput(studentId: string, role: string): Promi
     activeEnrollments: student.enrollments
       .filter((enrollment) => enrollment.status === "Enrolled")
       .map((enrollment) => ({
-        sectionName: `${enrollment.classSection.course.code} ${enrollment.classSection.term}`,
+        sectionName: `${enrollment.classSection.course.code} ${enrollment.classSection.academicTerm.name}`,
         courseTitle: enrollment.classSection.course.title
       })),
     recentGrades: student.submissions.map((submission) => ({

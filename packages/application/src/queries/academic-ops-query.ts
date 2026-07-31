@@ -4,7 +4,16 @@ import { calculateRubricScore } from "@agentic-edu/domain";
 export async function getAcademicOperationsOverview() {
   const [terms, guardians, rubrics, notifications, approvals] = await Promise.all([
     prisma.academicTerm.findMany({
-      include: { gradingPeriods: true, sections: { include: { course: true } } },
+      include: {
+        gradingPeriods: {
+          orderBy: { startsAt: "asc" },
+          // Assignment counts per period are what make a weight meaningful: a
+          // period worth 40% with no assignments in it is a configuration
+          // problem, and the only way to see it is to count.
+          include: { _count: { select: { assignments: true } } }
+        },
+        sections: { include: { course: true } }
+      },
       orderBy: { startsAt: "desc" }
     }),
     prisma.guardian.findMany({
