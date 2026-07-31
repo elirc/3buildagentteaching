@@ -39,7 +39,15 @@ export const jobPayloadSchemas = {
   }),
   ReportGeneration: z.object({
     report: z.string().min(1),
-    sectionId: z.string().min(1).optional()
+    // The seeded job_report_timeout carries only { report, sectionId }, so both
+    // scope fields have to be optional for it to keep meaning what it meant.
+    // An absent scope is the whole school, which is the sensible default and
+    // not a missing value.
+    scopeType: z.enum(["School", "ClassSection", "Advisor"]).optional(),
+    scopeId: z.string().min(1).optional(),
+    sectionId: z.string().min(1).optional(),
+    /** ISO date; the handler defaults to the current week when absent. */
+    periodEnd: z.string().optional()
   }),
   EnrollmentSync: z.object({
     sectionId: z.string().min(1)

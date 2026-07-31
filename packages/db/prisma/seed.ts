@@ -23,6 +23,7 @@ function fingerprint(service: string, level: string, message: string): string {
 }
 
 async function main() {
+  await prisma.report.deleteMany();
   await prisma.auditEvent.deleteMany();
   await prisma.agentRecommendation.deleteMany();
   await prisma.agentEvaluation.deleteMany();

@@ -1,6 +1,8 @@
 import type { JobType } from "@agentic-edu/shared";
-import { canDeliverNotification } from "@agentic-edu/domain";
+import type { Prisma } from "@agentic-edu/db";
+import { canDeliverNotification, isoWeekRange } from "@agentic-edu/domain";
 import type { Logger } from "@agentic-edu/observability";
+import { buildWeeklyRiskSnapshot } from "../queries/report-query";
 import type { PrismaTransaction } from "../audit";
 import type { ActorContext } from "../context";
 import { AppError } from "../errors";
@@ -90,11 +92,60 @@ export const jobHandlers = {
     return { detail: `Summarised ${count} attendance record(s) for ${input.studentId} over ${input.range}.` };
   },
 
-  ReportGeneration: async (payload) => {
+  ReportGeneration: async (payload, { tx, jobId, log }) => {
     const input = jobPayloadSchemas.ReportGeneration.parse(payload);
-    // US-16 gives this a Report row to write. Until then it validates and
-    // reports, which is enough to keep the queue honest.
-    return { detail: `Prepared "${input.report}" report inputs.` };
+    if (input.report !== "weekly-risk") {
+      throw new AppError("VALIDATION_ERROR", `No generator for report "${input.report}".`, { report: input.report });
+    }
+
+    /*
+     * `sectionId` is the shape the seeded job uses; scopeType/scopeId is the
+     * shape everything since US-16 uses. Accepting both means the seed's
+     * demonstration keeps working without pretending the old shape was ever
+     * expressive enough.
+     */
+    const scopeType = input.scopeType ?? (input.sectionId ? "ClassSection" : "School");
+    const scopeId = input.scopeId ?? input.sectionId ?? null;
+
+    const { periodStart, periodEnd } = isoWeekRange(input.periodEnd ? new Date(input.periodEnd) : new Date());
+    const snapshot = await buildWeeklyRiskSnapshot({ scopeType, scopeId }, periodStart, periodEnd);
+
+    /*
+     * One report per scope per week, enforced here rather than by a unique
+     * index. Postgres treats NULLs as distinct, and scopeId is null for the
+     * whole-school report — so a unique constraint over (type, scopeType,
+     * scopeId, periodStart) would happily allow two of exactly the row this is
+     * meant to prevent. Doing it in the handler, inside the worker's
+     * transaction, covers the case a constraint cannot.
+     *
+     * Re-running replaces the snapshot rather than adding a second one. That is
+     * right for a report of the *current* week, which is still accumulating;
+     * previous weeks are untouched because their periodStart differs.
+     */
+    const existing = await tx.report.findFirst({
+      where: { type: "weekly-risk", scopeType, scopeId, periodStart }
+    });
+
+    const data = {
+      type: "weekly-risk",
+      scopeType,
+      scopeId,
+      periodStart,
+      periodEnd,
+      payload: snapshot as unknown as Prisma.InputJsonValue,
+      jobId
+    };
+    const report = existing
+      ? await tx.report.update({ where: { id: existing.id }, data })
+      : await tx.report.create({ data });
+
+    log.info("Report generated", {
+      entityType: "Report",
+      entityId: report.id,
+      metadata: { type: "weekly-risk", scopeType, students: snapshot.totals.students }
+    });
+
+    return { detail: `Generated weekly-risk report over ${snapshot.totals.students} student(s).` };
   },
 
   EnrollmentSync: async (payload, { tx }) => {
