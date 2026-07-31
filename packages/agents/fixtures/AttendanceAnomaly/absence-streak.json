@@ -1,0 +1,25 @@
+{
+  "name": "absence-streak",
+  "input": {
+    "targetName": "Maya Johnson",
+    "targetType": "Student",
+    "records": [
+      { "status": "Absent", "date": "2026-01-01T00:00:00.000Z" },
+      { "status": "Absent", "date": "2026-01-02T00:00:00.000Z" },
+      { "status": "Absent", "date": "2026-01-03T00:00:00.000Z" },
+      { "status": "Absent", "date": "2026-01-04T00:00:00.000Z" },
+      { "status": "Absent", "date": "2026-01-05T00:00:00.000Z" }
+    ],
+    "dateRangeLabel": "recent records",
+    "historicalAverageIssuePoints": 2
+  },
+  "expected": {
+    "anomalyType": "AbsenceStreak",
+    "why": "Streak of 5 scores 45, and issue points of 5 exceed 1.7x the historical average of 2, adding 20. 65 clears the 60 threshold for advisor follow-up."
+  },
+  "assertions": [
+    { "path": "anomalyType", "op": "equals", "value": "AbsenceStreak" },
+    { "path": "advisorFollowUpRecommended", "op": "equals", "value": true },
+    { "path": "affectedTarget", "op": "equals", "value": "Maya Johnson" }
+  ]
+}

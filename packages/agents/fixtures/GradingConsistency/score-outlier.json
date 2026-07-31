@@ -1,0 +1,16 @@
+{
+  "name": "score-outlier",
+  "input": {
+    "assignment": { "id": "assignment_project", "title": "Budget Model Project", "type": "Project", "pointsPossible": 50 },
+    "submissions": [
+      { "studentId": "s1", "status": "Graded", "score": 45, "feedback": "Strong model." },
+      { "studentId": "s2", "status": "Graded", "score": 47, "feedback": "Clear assumptions." },
+      { "studentId": "s3", "status": "Graded", "score": 44, "feedback": "Good work." },
+      { "studentId": "s4", "status": "Graded", "score": 5, "feedback": "See me." }
+    ]
+  },
+  "expected": { "why": "One score sits far below a tight cluster. That is the case this agent exists to surface." },
+  "assertions": [
+    { "path": "consistencyScore", "op": "lessThan", "value": 100 }
+  ]
+}

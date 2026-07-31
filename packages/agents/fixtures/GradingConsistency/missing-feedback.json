@@ -1,0 +1,15 @@
+{
+  "name": "missing-feedback",
+  "input": {
+    "assignment": { "id": "assignment_quiz", "title": "Unit 2 Quiz", "type": "Quiz", "pointsPossible": 20 },
+    "submissions": [
+      { "studentId": "s1", "status": "Graded", "score": 18, "feedback": null },
+      { "studentId": "s2", "status": "Graded", "score": 15, "feedback": null },
+      { "studentId": "s3", "status": "Graded", "score": 12, "feedback": null }
+    ]
+  },
+  "expected": { "why": "Scored but never explained. A grade with no feedback is a number a student cannot act on." },
+  "assertions": [
+    { "path": "consistencyScore", "op": "lessThan", "value": 101 }
+  ]
+}

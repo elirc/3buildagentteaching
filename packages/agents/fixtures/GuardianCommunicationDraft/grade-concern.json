@@ -1,0 +1,26 @@
+{
+  "name": "grade-concern",
+  "input": {
+    "studentName": "Maya Johnson",
+    "guardianName": "Denise Johnson",
+    "guardianEmail": "denise.johnson@guardian.example",
+    "communicationReason": "GradeConcern",
+    "gradeSummary": {
+      "average": 56, "earnedPoints": 112, "possiblePoints": 200, "missingCount": 4,
+      "lateCount": 2, "gradedCount": 5, "trend": "Declining", "performanceBand": "AtRisk"
+    },
+    "attendanceSummary": {
+      "present": 10, "absent": 5, "tardy": 2, "excused": 1, "issuePoints": 7,
+      "attendanceRate": 61, "concernLevel": "Concern", "longestAbsenceStreak": 2
+    },
+    "missingAssignmentCount": 4,
+    "activeInterventionSummary": null,
+    "teacherNotes": [{ "noteType": "Academic", "content": "Missing several Algebra assignments." }]
+  },
+  "expected": { "requiredHumanReview": true },
+  "assertions": [
+    { "path": "requiredHumanReview", "op": "equals", "value": true },
+    { "path": "draftBody", "op": "contains", "value": "Denise Johnson" },
+    { "path": "draftBody", "op": "contains", "value": "Maya Johnson" }
+  ]
+}

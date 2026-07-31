@@ -1,0 +1,24 @@
+{
+  "name": "streak-below-escalation-threshold",
+  "input": {
+    "targetName": "Liam Brooks",
+    "targetType": "Student",
+    "records": [
+      { "status": "Absent", "date": "2026-01-01T00:00:00.000Z" },
+      { "status": "Absent", "date": "2026-01-02T00:00:00.000Z" },
+      { "status": "Absent", "date": "2026-01-03T00:00:00.000Z" }
+    ],
+    "dateRangeLabel": "recent records",
+    "historicalAverageIssuePoints": 2
+  },
+  "expected": {
+    "anomalyType": "AbsenceStreak",
+    "advisorFollowUpRecommended": false,
+    "why": "The boundary, written down. A 3-day streak scores 45 and 3 issue points do not exceed 1.7x an average of 2, so nothing is added and the score stays below the 60 escalation threshold. I expected this to escalate when I wrote the first version of these fixtures; it does not, and pinning where the line actually sits is worth more than my guess about where it should be."
+  },
+  "assertions": [
+    { "path": "anomalyType", "op": "equals", "value": "AbsenceStreak" },
+    { "path": "anomalyScore", "op": "lessThan", "value": 60 },
+    { "path": "advisorFollowUpRecommended", "op": "equals", "value": false }
+  ]
+}

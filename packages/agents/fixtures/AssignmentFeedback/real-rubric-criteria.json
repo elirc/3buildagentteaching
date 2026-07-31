@@ -1,0 +1,14 @@
+{
+  "name": "real-rubric-criteria",
+  "input": {
+    "assignment": { "title": "Poetry Analysis", "type": "Homework", "dueDate": "2026-03-01T00:00:00.000Z", "pointsPossible": 20 },
+    "submission": { "status": "Submitted", "submittedAt": "2026-02-28T00:00:00.000Z", "contentText": "Short response.", "score": null },
+    "rubricFields": ["Thesis clarity", "Textual evidence", "Structure"]
+  },
+  "expected": {
+    "why": "US-06 made the feedback agent read the assignment's real rubric instead of four hardcoded fields. This fixture uses criteria that exist in no hardcoded list, so a regression to the hardcoded set fails it."
+  },
+  "assertions": [
+    { "path": "missingCriteria", "op": "arrayIncludes", "value": "Thesis clarity" }
+  ]
+}

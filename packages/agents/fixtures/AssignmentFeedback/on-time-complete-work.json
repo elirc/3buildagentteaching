@@ -1,0 +1,18 @@
+{
+  "name": "on-time-complete-work",
+  "input": {
+    "assignment": { "title": "Cell Structure Lab", "type": "Lab", "dueDate": "2026-02-10T00:00:00.000Z", "pointsPossible": 30 },
+    "submission": {
+      "status": "Graded",
+      "submittedAt": "2026-02-09T00:00:00.000Z",
+      "contentText": "Detailed write-up with labelled diagrams, evidence from the microscope observations, and a reflection on sources of error.",
+      "score": 27,
+      "feedback": null
+    },
+    "rubricFields": ["reasoning", "evidence", "complete", "reflection"]
+  },
+  "expected": { "lateSubmissionNote": null },
+  "assertions": [
+    { "path": "lateSubmissionNote", "op": "equals", "value": null }
+  ]
+}

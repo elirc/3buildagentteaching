@@ -1,0 +1,45 @@
+{
+  "name": "critical-shortens-review-window",
+  "input": {
+    "studentName": "Maya Johnson",
+    "progress": {
+      "academicSummary": "Sharp decline across every subject.",
+      "strengths": [],
+      "concerns": ["Failing three courses"],
+      "gradeTrend": "Declining",
+      "attendanceTrend": "Concern",
+      "missingWorkSummary": "6 missing assignments",
+      "recommendedNextActions": ["Immediate advisor escalation"],
+      "recommendedOwner": "Advisor",
+      "interventionRecommended": true
+    },
+    "risk": {
+      "riskScore": 92,
+      "riskLevel": "Critical",
+      "primaryRiskAreas": ["Grades", "Attendance", "Engagement"],
+      "evidence": ["Grade average critically low", "Nine absences"],
+      "recommendedIntervention": "Create an attendance intervention with guardian outreach.",
+      "suggestedFollowUpDate": "2026-10-15",
+      "escalationRecommendation": "Escalate to school manager and advisor within two school days."
+    },
+    "attendance": {
+      "anomalyScore": 88,
+      "anomalyType": "AbsenceStreak",
+      "affectedTarget": "Maya Johnson",
+      "evidence": ["Six consecutive absences"],
+      "suspectedCauseCategory": "AcademicEngagement",
+      "recommendedNextAction": "Same-week advisor contact",
+      "advisorFollowUpRecommended": true
+    },
+    "activeInterventions": [],
+    "guardianDigestOptIn": true,
+    "now": "2026-10-13T00:00:00.000Z"
+  },
+  "expected": {
+    "why": "Critical shortens the review window from 7 days to 2. With the clock injected, that date is a fixed value a fixture can assert — before US-19 it changed daily."
+  },
+  "assertions": [
+    { "path": "nextReviewDate", "op": "equals", "value": "2026-10-15" },
+    { "path": "needsHumanApproval", "op": "equals", "value": true }
+  ]
+}

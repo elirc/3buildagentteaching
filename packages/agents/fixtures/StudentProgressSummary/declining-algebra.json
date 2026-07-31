@@ -1,0 +1,37 @@
+{
+  "name": "declining-algebra",
+  "input": {
+    "studentProfile": {
+      "id": "student_maya",
+      "firstName": "Maya",
+      "lastName": "Johnson",
+      "enrollmentStatus": "Probation",
+      "gradeLevel": 9
+    },
+    "activeEnrollments": [
+      { "sectionName": "MATH-101 Fall 2026", "courseTitle": "Algebra I" },
+      { "sectionName": "SCI-110 Fall 2026", "courseTitle": "Biology" }
+    ],
+    "recentGrades": [
+      { "score": 12, "pointsPossible": 20, "status": "Graded", "gradedAt": "2026-09-10T00:00:00.000Z" },
+      { "score": 10, "pointsPossible": 20, "status": "Graded", "gradedAt": "2026-09-20T00:00:00.000Z" },
+      { "score": 8, "pointsPossible": 20, "status": "Graded", "gradedAt": "2026-10-01T00:00:00.000Z" },
+      { "score": null, "pointsPossible": 20, "status": "Missing", "gradedAt": null }
+    ],
+    "missingAssignments": 1,
+    "lateAssignments": 1,
+    "attendanceRecords": [
+      { "status": "Absent", "date": "2026-10-05T00:00:00.000Z" },
+      { "status": "Present", "date": "2026-10-06T00:00:00.000Z" }
+    ],
+    "supportNotes": [
+      { "noteType": "Academic", "content": "Struggling with linear equations.", "createdAt": "2026-10-02T00:00:00.000Z" }
+    ],
+    "activeInterventionPlans": []
+  },
+  "expected": { "interventionRecommended": true },
+  "assertions": [
+    { "path": "interventionRecommended", "op": "equals", "value": true },
+    { "path": "academicSummary", "op": "contains", "value": "Maya" }
+  ]
+}

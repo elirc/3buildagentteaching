@@ -1,0 +1,20 @@
+{
+  "name": "no-anomaly-clean-record",
+  "input": {
+    "targetName": "Liam Brooks",
+    "targetType": "Student",
+    "records": [
+      { "status": "Present", "date": "2026-01-01T00:00:00.000Z" },
+      { "status": "Present", "date": "2026-01-02T00:00:00.000Z" },
+      { "status": "Present", "date": "2026-01-03T00:00:00.000Z" },
+      { "status": "Present", "date": "2026-01-04T00:00:00.000Z" }
+    ],
+    "dateRangeLabel": "recent records",
+    "historicalAverageIssuePoints": 2
+  },
+  "expected": { "anomalyType": "NoAnomaly" },
+  "assertions": [
+    { "path": "anomalyType", "op": "equals", "value": "NoAnomaly" },
+    { "path": "advisorFollowUpRecommended", "op": "equals", "value": false }
+  ]
+}

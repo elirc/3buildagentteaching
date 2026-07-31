@@ -1,0 +1,24 @@
+{
+  "name": "exhausted-retries",
+  "input": {
+    "job": {
+      "id": "job_permission",
+      "type": "EnrollmentSync",
+      "status": "DeadLettered",
+      "attempts": 3,
+      "maxAttempts": 3,
+      "errorMessage": "Permission denied for enrollment sync",
+      "payload": { "sectionId": "section_algebra_a" }
+    },
+    "relatedLogs": [
+      { "level": "error", "message": "Permission denied", "fingerprint": "def456def456" },
+      { "level": "warn", "message": "Retry scheduled", "fingerprint": "def456def456" }
+    ]
+  },
+  "expected": {
+    "why": "Attempts have reached maxAttempts. Recommending another retry here would be advice to do the thing that already failed three times."
+  },
+  "assertions": [
+    { "path": "retryRecommendation", "op": "equals", "value": "Escalate" }
+  ]
+}

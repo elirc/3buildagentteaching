@@ -1,0 +1,40 @@
+{
+  "name": "high-not-critical-routes-to-advisor",
+  "input": {
+    "studentName": "Liam Brooks",
+    "gradeSummary": {
+      "average": 65,
+      "earnedPoints": 130,
+      "possiblePoints": 200,
+      "missingCount": 2,
+      "lateCount": 1,
+      "gradedCount": 6,
+      "trend": "Stable",
+      "performanceBand": "AtRisk"
+    },
+    "attendanceSummary": {
+      "present": 18,
+      "absent": 5,
+      "tardy": 1,
+      "excused": 0,
+      "issuePoints": 6,
+      "longestAbsenceStreak": 2,
+      "attendanceRate": 75,
+      "concernLevel": "Elevated"
+    },
+    "interventionHistory": [],
+    "recentSupportNotes": [{ "noteType": "Attendance", "content": "Two unexplained absences." }],
+    "now": "2026-10-13T00:00:00.000Z"
+  },
+  "expected": {
+    "riskLevel": "High",
+    "owner": "Advisor",
+    "why": "The boundary case for US-12's owner routing fix: High goes to Advisor, only Critical goes to Admin."
+  },
+  "assertions": [
+    { "path": "riskLevel", "op": "equals", "value": "High" },
+    { "path": "riskScore", "op": "lessThan", "value": 80 },
+    { "path": "riskScore", "op": "greaterThan", "value": 59 },
+    { "path": "escalationRecommendation", "op": "contains", "value": "advisor" }
+  ]
+}

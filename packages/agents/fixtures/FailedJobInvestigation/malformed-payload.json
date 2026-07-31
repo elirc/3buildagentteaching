@@ -1,0 +1,21 @@
+{
+  "name": "malformed-payload",
+  "input": {
+    "job": {
+      "id": "job_attendance_malformed",
+      "type": "AttendanceSummary",
+      "status": "Failed",
+      "attempts": 3,
+      "maxAttempts": 3,
+      "errorMessage": "Invalid payload — range: Range must look like YYYY-MM-DD..YYYY-MM-DD.",
+      "payload": { "range": "{bad-json", "studentId": "student_maya" }
+    },
+    "relatedLogs": [
+      { "level": "error", "message": "Job failed", "fingerprint": "abc123abc123" }
+    ]
+  },
+  "expected": { "retryRecommendation": "FixPayloadThenRetry or DeadLetter" },
+  "assertions": [
+    { "path": "suspectedRootCause", "op": "contains", "value": "payload" }
+  ]
+}

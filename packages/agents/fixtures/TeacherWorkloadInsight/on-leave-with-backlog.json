@@ -1,0 +1,19 @@
+{
+  "name": "on-leave-with-backlog",
+  "input": {
+    "teacherProfile": { "id": "teacher_bio", "name": "Dana Cole", "employmentStatus": "OnLeave" },
+    "activeSectionCount": 3,
+    "studentCount": 90,
+    "activeAssignmentCount": 8,
+    "ungradedSubmissionCount": 30,
+    "highRiskStudentCount": 4,
+    "recentSupportNoteCount": 2,
+    "failedJobCount": 0
+  },
+  "expected": {
+    "why": "The edge case that matters for this agent: a teacher on leave still holding a backlog is an administrative problem, not a workload coaching one. Someone else has to grade it."
+  },
+  "assertions": [
+    { "path": "workloadScore", "op": "greaterThan", "value": 40 }
+  ]
+}
