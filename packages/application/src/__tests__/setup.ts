@@ -15,6 +15,7 @@ const { prisma } = await import("@agentic-edu/db");
  * order the way a sequence of DELETEs would.
  */
 const TABLES = [
+  "Report",
   "AuditEvent", "AgentRecommendation", "AgentEvaluation", "AgentManifest", "AgentRun",
   "WorkerLock", "BackgroundJob", "StructuredLog", "Notification", "InterventionApproval",
   "InterventionPlan", "SupportNote", "AttendanceRecord", "SubmissionCriterionScore",
