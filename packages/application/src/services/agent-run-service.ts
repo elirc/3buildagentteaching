@@ -24,7 +24,8 @@ import { prisma } from "@agentic-edu/db";
 import {
   calculateGradeSummary,
   scoreStudentRisk,
-  summarizeAttendance
+  summarizeAttendance,
+  PERMISSION_ACTIONS
 } from "@agentic-edu/domain";
 import type { AgentRunStatus, AgentTargetType, AgentType } from "@agentic-edu/shared";
 import { assertCan, type ActorContext } from "../context";
@@ -33,6 +34,7 @@ import { AppError } from "../errors";
 import { jobService } from "./job-service";
 import type { JobPayload } from "../jobs/schemas";
 import { withServiceLogging } from "../logging";
+import { resolveManifest } from "./manifest-gate";
 
 function jsonSafe(value: unknown) {
   return JSON.parse(JSON.stringify(value));
@@ -50,17 +52,34 @@ async function persistAgentRun<TInput, TOutput>(input: {
   targetType: AgentTargetType;
   targetId: string;
   inputSnapshot: TInput;
-  agentVersion?: string;
   execute: () => { output: TOutput; confidenceScore: number; trace: unknown; findings: unknown; recommendations: unknown; limitations: unknown };
 }) {
+  /*
+   * The manifest gate runs BEFORE the AgentRun row is created, and that
+   * ordering is the acceptance criterion rather than an implementation detail.
+   *
+   * A refused run must leave no trace. A Failed row in the table means "it ran
+   * and it broke" — a different and more alarming claim than "that agent is
+   * switched off", and one that would make the failed-run count on /agent-ops
+   * meaningless the moment anyone deactivated a manifest.
+   */
+  const manifest = await resolveManifest({
+    actor: input.actor,
+    agentType: input.agentType,
+    targetType: input.targetType,
+    knownPermissions: PERMISSION_ACTIONS
+  });
+
   const started = await prisma.$transaction(async (tx) => {
     const run = await tx.agentRun.create({
       data: {
         agentType: input.agentType,
         status: "Running" satisfies AgentRunStatus,
-        agentVersion: input.agentVersion ?? "1.0.0",
-        inputSchemaVersion: "1.0.0",
-        outputSchemaVersion: "1.0.0",
+        // From the manifest, not from a hardcoded "1.0.0". The runs table used
+        // to claim a version the registry had never heard of.
+        agentVersion: manifest.version,
+        inputSchemaVersion: manifest.inputSchemaVersion,
+        outputSchemaVersion: manifest.outputSchemaVersion,
         targetType: input.targetType,
         targetId: input.targetId,
         inputSnapshot: jsonSafe(input.inputSnapshot),
