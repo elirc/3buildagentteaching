@@ -635,6 +635,29 @@ export async function unlinkGuardianFromStudent(_previous: FormState, formData: 
   });
 }
 
+export async function closeTerm(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const termId = stringValue(formData, "termId");
+    const result = await academicOperationsService.closeTerm(actor, termId);
+    revalidatePath(`/terms/${termId}`);
+    revalidatePath("/terms");
+    revalidatePath("/agent-runs");
+    return result;
+  });
+}
+
+export async function runTermPostmortemAgent(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const termId = stringValue(formData, "termId");
+    const run = await agentRunService.runTermPostmortemAgent(actor, termId);
+    revalidatePath(`/terms/${termId}`);
+    revalidatePath("/agent-runs");
+    return run;
+  });
+}
+
 export async function setManifestActive(_previous: FormState, formData: FormData): Promise<FormState> {
   return runAction(async () => {
     const actor = await getCurrentActor();
