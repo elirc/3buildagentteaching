@@ -11,7 +11,10 @@ import {
   canTransitionApproval,
   canReduceCapacity,
   decideEnrollment,
+  decideGuardianUnlink,
   decideLogRetention,
+  normalizeGuardianEmail,
+  splitGuardianName,
   decideWaitlistPromotion,
   determineSubmissionStatus,
   findLongestAbsenceStreak,
@@ -26,6 +29,7 @@ import {
   canPerform,
   scoreStudentRisk,
   scoreTeacherWorkload,
+  studentCreateSchema,
   studentSchema,
   summarizeAttendance,
   validateAcademicTerm,
@@ -450,11 +454,31 @@ describe("validation", () => {
         email: "not-an-email",
         gradeLevel: 9,
         enrollmentStatus: "Active",
-        studentNumber: "NS-9999",
-        guardianName: "Guardian",
-        guardianEmail: "guardian@example.com"
+        studentNumber: "NS-9999"
       })
     ).toThrow();
+  });
+
+  it("requires a guardian to create a student but not to edit one", () => {
+    const fields = {
+      firstName: "Maya",
+      lastName: "Johnson",
+      email: "maya@student.example",
+      gradeLevel: 9,
+      enrollmentStatus: "Active" as const,
+      studentNumber: "NS-9999"
+    };
+
+    // Editing a student says nothing about their guardians. That asymmetry is
+    // the fix: guardian fields on the edit form are how the denormalised copy
+    // drifted from the Guardian record every time someone changed a grade level.
+    expect(() => studentSchema.parse(fields)).not.toThrow();
+
+    expect(() => studentCreateSchema.parse(fields)).toThrow();
+    expect(() => studentCreateSchema.parse({ ...fields, primaryGuardian: { name: "Denise Johnson", email: "not-an-email" } })).toThrow();
+    expect(() =>
+      studentCreateSchema.parse({ ...fields, primaryGuardian: { name: "Denise Johnson", email: "denise@example.com" } })
+    ).not.toThrow();
   });
 
   it("rejects enum values that used to reach Prisma through an `as never` cast", () => {
@@ -604,6 +628,36 @@ describe("role permissions", () => {
     expect(canPerform({ id: "u", role: "SchoolManager" }, "log:manage")).toBe(false);
     expect(canPerform({ id: "u", role: "Advisor" }, "log:manage")).toBe(false);
     expect(canPerform({ id: "u", role: "Teacher" }, "log:manage")).toBe(false);
+  });
+});
+
+describe("guardian records", () => {
+  it("splits a full name on the last space, so multi-word first names survive", () => {
+    expect(splitGuardianName("Denise Johnson")).toEqual({ firstName: "Denise", lastName: "Johnson" });
+    expect(splitGuardianName("Maria de la Cruz")).toEqual({ firstName: "Maria de la", lastName: "Cruz" });
+    expect(splitGuardianName("  Harper   Brooks  ")).toEqual({ firstName: "Harper", lastName: "Brooks" });
+  });
+
+  it("leaves a one-word name's surname blank rather than duplicating it", () => {
+    // Visibly incomplete beats confidently wrong: the guardian panel shows both
+    // fields, so a blank is something a human can notice and fix. "Cher Cher"
+    // looks like data.
+    expect(splitGuardianName("Cher")).toEqual({ firstName: "Cher", lastName: "" });
+    expect(splitGuardianName("   ")).toEqual({ firstName: "", lastName: "" });
+  });
+
+  it("treats email as a case-insensitive identity", () => {
+    expect(normalizeGuardianEmail("  Denise.Johnson@Guardian.Example ")).toBe("denise.johnson@guardian.example");
+  });
+
+  it("refuses to unlink a student's only guardian", () => {
+    const refused = decideGuardianUnlink({ linkCount: 1 });
+    expect(refused.allowed).toBe(false);
+    expect(refused.reason).toContain("only guardian");
+
+    expect(decideGuardianUnlink({ linkCount: 2 }).allowed).toBe(true);
+    // Defensive: a count of 0 should not read as "fine to delete another".
+    expect(decideGuardianUnlink({ linkCount: 0 }).allowed).toBe(false);
   });
 });
 
