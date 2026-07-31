@@ -3,8 +3,11 @@ import { decideEnrollment, decideWaitlistPromotion } from "@agentic-edu/domain";
 import { AppError } from "../errors";
 import { assertCan, type ActorContext } from "../context";
 import { createAuditEvent } from "../audit";
+import { withServiceLogging } from "../logging";
 
-export const enrollmentService = {
+/* Named, not wrapped inline, because `bulkEnroll` calls `this.enrollStudent` —
+ * see the note in withServiceLogging. */
+const enrollmentServiceMethods = {
   async enrollStudent(
     actor: ActorContext,
     input: {
@@ -181,3 +184,5 @@ export const enrollmentService = {
     });
   }
 };
+
+export const enrollmentService = withServiceLogging("enrollment-service", enrollmentServiceMethods);

@@ -4,8 +4,9 @@ import { AppError } from "../errors";
 import { assertCan, type ActorContext } from "../context";
 import { canReduceCapacity } from "@agentic-edu/domain";
 import { createAuditEvent } from "../audit";
+import { withServiceLogging } from "../logging";
 
-export const academicService = {
+export const academicService = withServiceLogging("academic-service", {
   async createCourse(actor: ActorContext, input: CourseInput) {
     assertCan(actor, "course:create");
     return prisma.$transaction(async (tx) => {
@@ -96,4 +97,4 @@ export const academicService = {
       return section;
     });
   }
-};
+});

@@ -5,8 +5,9 @@ import { AppError } from "../errors";
 import { assertCan, type ActorContext } from "../context";
 import { createAuditEvent, type PrismaTransaction } from "../audit";
 import { notifyService } from "./notify-service";
+import { withServiceLogging } from "../logging";
 
-export const jobService = {
+export const jobService = withServiceLogging("job-service", {
   /**
    * The only way a BackgroundJob is created.
    *
@@ -149,4 +150,4 @@ export const jobService = {
       return job;
     });
   }
-};
+});

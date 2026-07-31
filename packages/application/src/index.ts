@@ -1,5 +1,6 @@
 export * from "./context";
 export * from "./errors";
+export * from "./logging";
 export * from "./jobs/handlers";
 export * from "./jobs/schemas";
 export * from "./queries/academic-ops-query";

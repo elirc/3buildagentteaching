@@ -6,6 +6,7 @@ import { AppError } from "../errors";
 import { getJobHandler } from "../jobs/handlers";
 import { jobPayloadSchemas } from "../jobs/schemas";
 import { agentRunService } from "./agent-run-service";
+import { serviceLogger, withServiceLogging } from "../logging";
 
 /**
  * Turns whatever a handler threw into a message worth storing.
@@ -29,7 +30,13 @@ function describeFailure(error: unknown): string {
   return "Unknown worker error";
 }
 
-export const workerService = {
+/*
+ * Named rather than wrapped inline because `runNextBatch` calls
+ * `this.runNextJob`. See withServiceLogging: a literal passed straight into it
+ * is contextually typed by the generic constraint, which makes `this.x` resolve
+ * through an index signature and stop compiling.
+ */
+const workerServiceMethods = {
   /**
    * Processes the next runnable job.
    *
@@ -47,6 +54,21 @@ export const workerService = {
     assertCan(actor, "job:runWorker");
     const now = new Date();
     const workerId = `local-worker:${actor.id}`;
+    /*
+     * Job lifecycle lines are written from inside the transaction below, which
+     * looks like a violation of "log outside the transaction" and is not: the
+     * sink writes on its own connection, so it can neither hold this
+     * transaction open nor be rolled back with it. That last part is the point.
+     * A "Job started" line that survives a rolled-back job is precisely what
+     * tells an on-call engineer the worker picked the job up and then died —
+     * the case where logging inside the transaction and losing the line would
+     * leave no trace at all.
+     *
+     * entityType is "Job", not "BackgroundJob", because that is what
+     * runFailedJobInvestigationAgent searches for. Agreeing with the reader is
+     * more useful here than agreeing with the model name.
+     */
+    const log = serviceLogger("job-runner", actor);
 
     const outcome = await prisma.$transaction(async (tx) => {
       const job = await tx.backgroundJob.findFirst({
@@ -89,10 +111,16 @@ export const workerService = {
         data: { status: "Running", startedAt: now }
       });
 
+      log.info("Job started", {
+        entityType: "Job",
+        entityId: job.id,
+        metadata: { jobType: job.type, attempt: job.attempts + 1, maxAttempts: job.maxAttempts, workerId }
+      });
+
       let failure: string | null = null;
       let detail = "";
       try {
-        const result = await getJobHandler(job.type)(job.payload, { tx, actor, jobId: job.id });
+        const result = await getJobHandler(job.type)(job.payload, { tx, actor, jobId: job.id, log });
         detail = result.detail;
       } catch (error) {
         failure = describeFailure(error);
@@ -109,6 +137,27 @@ export const workerService = {
           finishedAt: new Date()
         }
       });
+
+      if (failure) {
+        /*
+         * The message says which of the two failure states this is but not why —
+         * the reason is `failureReason` in metadata. Putting the error text in
+         * the message would give every distinct error its own fingerprint, and
+         * the /logs grouping panel exists to answer "how many times did this
+         * happen", not "how many different sentences have we produced".
+         */
+        log.error(finalStatus === "DeadLettered" ? "Job dead-lettered" : "Job failed", {
+          entityType: "Job",
+          entityId: job.id,
+          metadata: { jobType: job.type, attempt: finished.attempts, maxAttempts: job.maxAttempts, failureReason: failure }
+        });
+      } else {
+        log.info("Job succeeded", {
+          entityType: "Job",
+          entityId: job.id,
+          metadata: { jobType: job.type, attempt: finished.attempts, detail }
+        });
+      }
 
       await tx.workerLock.delete({ where: { jobId: job.id } });
       await createAuditEvent(tx, {
@@ -181,6 +230,8 @@ export const workerService = {
     return result.count;
   }
 };
+
+export const workerService = withServiceLogging("worker-service", workerServiceMethods);
 
 async function dispatchAgent(actor: ActorContext, agentType: string, targetId: string) {
   switch (agentType) {

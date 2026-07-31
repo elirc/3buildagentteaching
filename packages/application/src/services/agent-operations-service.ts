@@ -3,6 +3,7 @@ import type { AgentRecommendationStatus, AgentType } from "@agentic-edu/shared";
 import { createAuditEvent } from "../audit";
 import { assertCan, type ActorContext } from "../context";
 import { AppError } from "../errors";
+import { withServiceLogging } from "../logging";
 
 export interface AgentManifestInput {
   agentType: AgentType;
@@ -16,7 +17,7 @@ export interface AgentManifestInput {
   isActive?: boolean;
 }
 
-export const agentOperationsService = {
+export const agentOperationsService = withServiceLogging("agent-operations-service", {
   async upsertManifest(actor: ActorContext, input: AgentManifestInput) {
     assertCan(actor, "agentManifest:manage");
     return prisma.$transaction(async (tx) => {
@@ -92,4 +93,4 @@ export const agentOperationsService = {
       return recommendation;
     });
   }
-};
+});

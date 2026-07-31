@@ -4,6 +4,7 @@ import type { NotificationChannel, NotificationType } from "@agentic-edu/shared"
 import { createAuditEvent, type PrismaTransaction } from "../audit";
 import type { ActorContext } from "../context";
 import { jobService } from "./job-service";
+import { withServiceLogging } from "../logging";
 
 export interface NotifyInput {
   type: NotificationType;
@@ -30,7 +31,7 @@ export interface NotifyInput {
  * it, not a separate action a user requested. Requiring notification:manage here
  * would mean a teacher could grade work but not tell the student about it.
  */
-export const notifyService = {
+export const notifyService = withServiceLogging("notify-service", {
   async notify(actor: ActorContext, input: NotifyInput, tx: PrismaTransaction) {
     const recipients = routeNotificationRecipients(input.type, input.candidates, { ownerRole: input.ownerRole });
     if (recipients.length === 0) return [];
@@ -112,4 +113,4 @@ export const notifyService = {
     }
     return candidates;
   }
-};
+});

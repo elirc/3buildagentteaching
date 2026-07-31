@@ -31,6 +31,7 @@ import { assertCan, type ActorContext } from "../context";
 import { createAuditEvent } from "../audit";
 import { jobService } from "./job-service";
 import type { JobPayload } from "../jobs/schemas";
+import { withServiceLogging } from "../logging";
 
 function jsonSafe(value: unknown) {
   return JSON.parse(JSON.stringify(value));
@@ -144,7 +145,7 @@ async function persistAgentRun<TInput, TOutput>(input: {
   }
 }
 
-export const agentRunService = {
+export const agentRunService = withServiceLogging("agent-run-service", {
   /**
    * Queues an agent instead of running it inline.
    *
@@ -325,7 +326,7 @@ export const agentRunService = {
       execute: () => executeAgent<StudentSuccessReviewInput, StudentSuccessReviewOutput>("StudentSuccessReview", agentInput)
     });
   }
-};
+});
 
 async function buildStudentProgressInput(studentId: string, role: string): Promise<StudentProgressInput> {
   const student = await prisma.student.findUniqueOrThrow({
