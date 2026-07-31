@@ -33,7 +33,8 @@ export type PermissionAction =
   | "agentRecommendation:decide"
   | "guardian:viewOwnStudents"
   | "guardian:updateOwnPreferences"
-  | "notification:readOwn";
+  | "notification:readOwn"
+  | "log:manage";
 
 export interface PermissionActor {
   id: string;
@@ -89,6 +90,13 @@ const platformManagerActions: PermissionAction[] = [
   "agent:run",
   "agentManifest:manage",
   "agentRecommendation:decide"
+  /*
+   * "log:manage" is deliberately absent. A SchoolManager runs the school; the
+   * observability record of what the software did is not theirs to delete, and
+   * the one irreversible action in this list should have the smallest possible
+   * set of people who can take it. Admin reaches it through the short-circuit
+   * below.
+   */
 ];
 
 export function canPerform(actor: PermissionActor, action: PermissionAction, resource: PermissionResource = {}): boolean {
