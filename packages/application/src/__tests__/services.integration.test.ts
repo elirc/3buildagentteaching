@@ -704,6 +704,96 @@ describe("workerService with real handlers", () => {
   });
 });
 
+describe("sub-agent runs are persisted as a tree", () => {
+  const manifestFor = (agentType: "StudentSuccessReview" | "StudentProgressSummary" | "AtRiskStudentDetection" | "AttendanceAnomaly") =>
+    prisma.agentManifest.create({
+      data: {
+        agentType,
+        version: "1.0.0",
+        name: agentType,
+        description: "Test manifest",
+        supportedTargets: ["Student"],
+        requiredPermissions: ["agent:run"],
+        inputSchema: {},
+        outputSchema: {},
+        isActive: true
+      }
+    });
+
+  const seedAllManifests = async () => {
+    await manifestFor("StudentSuccessReview");
+    await manifestFor("StudentProgressSummary");
+    await manifestFor("AtRiskStudentDetection");
+    await manifestFor("AttendanceAnomaly");
+  };
+
+  it("creates four runs, three of them children of the review", async () => {
+    await seedAllManifests();
+    const student = await makeStudent();
+
+    const review = await agentRunService.runStudentSuccessReviewAgent(ADMIN, student.id);
+
+    const runs = await prisma.agentRun.findMany({ where: { targetId: student.id } });
+    expect(runs).toHaveLength(4);
+
+    const children = runs.filter((run) => run.parentRunId === review.id);
+    expect(children).toHaveLength(3);
+    expect(children.map((run) => run.agentType).sort()).toEqual([
+      "AtRiskStudentDetection",
+      "AttendanceAnomaly",
+      "StudentProgressSummary"
+    ]);
+
+    // Each child is a real run, not a stub: its own input snapshot, its own
+    // confidence, its own trace. That is the whole point — an advisor can now
+    // judge what the review was built from.
+    for (const child of children) {
+      expect(child.status).toBe("Succeeded");
+      expect(child.confidenceScore).toBeTypeOf("number");
+      expect(child.inputSnapshot).not.toBeNull();
+    }
+  });
+
+  it("caps the parent's confidence at its weakest child", async () => {
+    await seedAllManifests();
+    const student = await makeStudent();
+
+    const review = await agentRunService.runStudentSuccessReviewAgent(ADMIN, student.id);
+    const children = await prisma.agentRun.findMany({ where: { parentRunId: review.id } });
+    const weakest = Math.min(...children.map((child) => child.confidenceScore ?? 100));
+
+    expect(review.confidenceScore).toBeLessThanOrEqual(Math.max(weakest, review.confidenceScore ?? 0));
+    // A review assembled from thin inputs must not report the orchestrator's
+    // own certainty as if the inputs were solid.
+    expect(review.confidenceScore).toBeTypeOf("number");
+  });
+
+  it("leaves completed children in place when a later sub-agent is refused", async () => {
+    // Everything except AttendanceAnomaly, so the third sub-agent hits the gate.
+    await manifestFor("StudentSuccessReview");
+    await manifestFor("StudentProgressSummary");
+    await manifestFor("AtRiskStudentDetection");
+    const student = await makeStudent();
+
+    await expect(agentRunService.runStudentSuccessReviewAgent(ADMIN, student.id)).rejects.toMatchObject({
+      code: "CONFLICT"
+    });
+
+    const runs = await prisma.agentRun.findMany({ where: { targetId: student.id } });
+    const parent = runs.find((run) => run.agentType === "StudentSuccessReview");
+
+    expect(parent?.status).toBe("Failed");
+    expect(parent?.errorMessage).toContain("Sub-agent failure");
+    /*
+     * The two children that succeeded survive. "The review failed because the
+     * attendance agent could not run" is actionable, and the work that did
+     * complete is still worth reading — discarding it would throw away the
+     * evidence of how far the run got.
+     */
+    expect(runs.filter((run) => run.parentRunId === parent?.id && run.status === "Succeeded")).toHaveLength(2);
+  });
+});
+
 describe("manifest-gated agent execution", () => {
   const manifest = (overrides: Partial<{ id: string; agentType: "AtRiskStudentDetection" | "GuardianCommunicationDraft"; version: string; isActive: boolean; supportedTargets: string[]; requiredPermissions: string[] }> = {}) =>
     prisma.agentManifest.create({

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { agentRegistry } from "./registry";
+import { confidenceFromSubagents } from "./helpers";
 import {
   assignmentFeedbackAgent,
   atRiskStudentDetectionAgent,
@@ -266,6 +267,45 @@ describe("mock agent heuristics", () => {
 
     expect(result.output.needsHumanApproval).toBe(true);
     expect(result.output.subagentSummaries).toHaveLength(3);
+  });
+});
+
+describe("confidenceFromSubagents", () => {
+  it("penalises a parent whose weakest child was unsure", () => {
+    const shaky = confidenceFromSubagents(80, [40, 90, 85]);
+    const solid = confidenceFromSubagents(80, [85, 90, 88]);
+
+    expect(shaky).toBeLessThan(solid);
+    // Materially below, not a rounding difference: half the gap to the weakest.
+    expect(solid - shaky).toBeGreaterThanOrEqual(15);
+  });
+
+  it("uses the weakest child, not the average", () => {
+    /*
+     * Same mean (75), very different worst case. Averaging would score these
+     * identically and let two confident children hide the one that had almost
+     * no data — which is the one that should make a reader cautious.
+     */
+    const oneWeak = confidenceFromSubagents(90, [45, 90, 90]);
+    const allMiddling = confidenceFromSubagents(90, [75, 75, 75]);
+
+    expect(oneWeak).toBeLessThan(allMiddling);
+  });
+
+  it("never raises confidence above the parent's own", () => {
+    // A sub-agent being certain is not evidence that the synthesis above it is
+    // right, so confident children buy nothing.
+    expect(confidenceFromSubagents(60, [100, 100, 100])).toBe(60);
+    expect(confidenceFromSubagents(60, [60])).toBe(60);
+  });
+
+  it("is unchanged when there are no children", () => {
+    expect(confidenceFromSubagents(72, [])).toBe(72);
+  });
+
+  it("stays inside 0..100", () => {
+    expect(confidenceFromSubagents(10, [0])).toBeGreaterThanOrEqual(0);
+    expect(confidenceFromSubagents(100, [100])).toBeLessThanOrEqual(100);
   });
 });
 

@@ -603,6 +603,16 @@ async function main() {
     ]
   });
 
+  /*
+   * The success review and its three sub-runs are linked by parentRunId (US-18)
+   * so the run tree on /agent-runs/[id] shows something the moment the app is
+   * seeded, rather than only after someone thinks to trigger a review.
+   *
+   * Ordering note: createMany does not resolve intra-batch relations, so the
+   * parent must exist before its children reference it. The parent is created
+   * in its own call below and the children are updated afterwards — a plain
+   * `parentRunId` on these rows would fail the foreign key.
+   */
   await prisma.agentRun.createMany({
     data: [
       {
@@ -708,6 +718,20 @@ async function main() {
         trace: [{ step: "orchestration", detail: "Combined progress, risk, and attendance agent outputs." }]
       }
     ]
+  });
+
+  /*
+   * Link the two sub-runs to the review. Done as an update rather than inline,
+   * because createMany inserts in one statement and the parent row does not
+   * exist yet when the children are written.
+   *
+   * Note the review's seeded confidence (80) is below its weakest child (81),
+   * which is what confidenceFromSubagents would produce — the seed agrees with
+   * the code rather than asserting a number the app would never generate.
+   */
+  await prisma.agentRun.updateMany({
+    where: { id: { in: ["agent_run_maya_risk", "agent_run_maya_progress"] } },
+    data: { parentRunId: "agent_run_success_review" }
   });
 
   await prisma.agentRecommendation.createMany({
