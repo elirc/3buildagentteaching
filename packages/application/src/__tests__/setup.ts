@@ -44,7 +44,10 @@ beforeEach(async () => {
   await prisma.user.createMany({
     data: [
       { id: "user_admin", name: "Avery Chen", email: "admin@northstar.example", role: "Admin" },
-      { id: "user_viewer", name: "Operations Viewer", email: "viewer@northstar.example", role: "Viewer" }
+      { id: "user_viewer", name: "Operations Viewer", email: "viewer@northstar.example", role: "Viewer" },
+      // Added for US-17: a Teacher holds agent:run but not notification:manage,
+      // which is the asymmetry the manifest gate is there to enforce.
+      { id: "user_teacher", name: "Nina Patel", email: "teacher@northstar.example", role: "Teacher" }
     ],
     skipDuplicates: true
   });

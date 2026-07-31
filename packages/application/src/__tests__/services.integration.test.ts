@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@agentic-edu/db";
 import { academicOperationsService } from "../services/academic-operations-service";
+import { agentOperationsService } from "../services/agent-operations-service";
 import { academicService } from "../services/academic-service";
 import { agentRunService } from "../services/agent-run-service";
 import { assignmentService } from "../services/assignment-service";
@@ -703,6 +704,102 @@ describe("workerService with real handlers", () => {
   });
 });
 
+describe("manifest-gated agent execution", () => {
+  const manifest = (overrides: Partial<{ id: string; agentType: "AtRiskStudentDetection" | "GuardianCommunicationDraft"; version: string; isActive: boolean; supportedTargets: string[]; requiredPermissions: string[] }> = {}) =>
+    prisma.agentManifest.create({
+      data: {
+        id: overrides.id ?? "manifest_test",
+        agentType: overrides.agentType ?? "AtRiskStudentDetection",
+        version: overrides.version ?? "1.0.0",
+        name: "Test manifest",
+        description: "Test",
+        supportedTargets: overrides.supportedTargets ?? ["Student"],
+        requiredPermissions: overrides.requiredPermissions ?? ["agent:run"],
+        inputSchema: { version: "3.1.0" },
+        outputSchema: { version: "4.2.0" },
+        isActive: overrides.isActive ?? true
+      }
+    });
+
+  it("refuses to run an agent with no active manifest, and creates no AgentRun", async () => {
+    const student = await makeStudent();
+    await manifest({ isActive: false });
+
+    await expect(agentRunService.runAtRiskAgent(ADMIN, student.id)).rejects.toMatchObject({ code: "CONFLICT" });
+
+    /*
+     * The assertion that matters. A Failed row would claim the agent ran and
+     * broke, which is a different and more alarming statement than "it is
+     * switched off" — and it would make the failed-run count on /agent-ops
+     * meaningless the moment anyone deactivated a manifest.
+     */
+    expect(await prisma.agentRun.count()).toBe(0);
+  });
+
+  it("takes version and schema versions from the manifest, not from hardcoded strings", async () => {
+    const student = await makeStudent();
+    await manifest({ version: "2.3.4" });
+
+    const run = await agentRunService.runAtRiskAgent(ADMIN, student.id);
+
+    expect(run.agentVersion).toBe("2.3.4");
+    expect(run.inputSchemaVersion).toBe("3.1.0");
+    expect(run.outputSchemaVersion).toBe("4.2.0");
+  });
+
+  it("serves the highest active version, so 1.0.10 beats 1.0.9", async () => {
+    const student = await makeStudent();
+    await manifest({ id: "m_9", version: "1.0.9" });
+    await manifest({ id: "m_10", version: "1.0.10" });
+
+    const run = await agentRunService.runAtRiskAgent(ADMIN, student.id);
+    expect(run.agentVersion).toBe("1.0.10");
+  });
+
+  it("enforces the manifest's requiredPermissions on top of agent:run", async () => {
+    const student = await makeStudent();
+    await manifest({ requiredPermissions: ["agent:run", "notification:manage"] });
+
+    // A Teacher holds agent:run but not notification:manage. Before US-17 the
+    // manifest said so and nothing read it.
+    await expect(
+      agentRunService.runAtRiskAgent({ id: "user_teacher", role: "Teacher" }, student.id)
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await prisma.agentRun.count()).toBe(0);
+  });
+
+  it("refuses a target type the manifest does not support", async () => {
+    const student = await makeStudent();
+    await manifest({ supportedTargets: ["Teacher"] });
+
+    await expect(agentRunService.runAtRiskAgent(ADMIN, student.id)).rejects.toMatchObject({
+      code: "VALIDATION_ERROR"
+    });
+  });
+
+  it("refuses a manifest requiring a permission the system does not define", async () => {
+    const student = await makeStudent();
+    await manifest({ requiredPermissions: ["agent:run", "agent:runn"] });
+
+    // A typo must not silently mean "no permission required". That is the
+    // failure mode where a security control quietly stops applying.
+    await expect(agentRunService.runAtRiskAgent(ADMIN, student.id)).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("deactivating the serving version rolls back to the next active one", async () => {
+    const student = await makeStudent();
+    await manifest({ id: "m_1", version: "1.9.0" });
+    const newer = await manifest({ id: "m_2", version: "2.0.0" });
+
+    expect((await agentRunService.runAtRiskAgent(ADMIN, student.id)).agentVersion).toBe("2.0.0");
+
+    await agentOperationsService.setManifestActive(ADMIN, newer.id, false);
+
+    expect((await agentRunService.runAtRiskAgent(ADMIN, student.id)).agentVersion).toBe("1.9.0");
+    expect(await prisma.auditEvent.count({ where: { action: "agentManifest.deactivated" } })).toBe(1);
+  });
+});
+
 describe("weekly risk reports", () => {
   it("generates one report per scope per week, however many times it is asked", async () => {
     const teacher = await makeTeacher();
@@ -923,6 +1020,24 @@ describe("guardian records are the only source of truth", () => {
     // fixture or a pre-US-14 row. The agent must report it rather than draft to
     // an address it invented.
     const orphan = await makeStudent();
+    /*
+     * The manifest is required as of US-17 — the gate runs before the input is
+     * built, so without this the agent refuses for a completely different
+     * reason and this test would pass while proving nothing about guardians.
+     */
+    await prisma.agentManifest.create({
+      data: {
+        agentType: "GuardianCommunicationDraft",
+        version: "1.0.0",
+        name: "Guardian Communication Draft Agent",
+        description: "Test manifest",
+        supportedTargets: ["Student"],
+        requiredPermissions: ["agent:run"],
+        inputSchema: {},
+        outputSchema: {},
+        isActive: true
+      }
+    });
 
     await expect(agentRunService.runGuardianCommunicationDraftAgent(ADMIN, orphan.id)).rejects.toMatchObject({
       code: "VALIDATION_ERROR"
