@@ -8,7 +8,9 @@ import { studentService } from "../services/student-service";
 import { enrollmentService } from "../services/enrollment-service";
 import { jobService } from "../services/job-service";
 import { logService } from "../services/log-service";
+import { reportService } from "../services/report-service";
 import { workerService } from "../services/worker-service";
+import type { WeeklyRiskReportPayload } from "@agentic-edu/domain";
 import { AppError } from "../errors";
 import { flushLogs } from "../logging";
 import { ADMIN, VIEWER, makeAssignment, makeRubric, makeSection, makeStudent, makeTeacher, makeTerm } from "./fixtures";
@@ -698,6 +700,61 @@ describe("workerService with real handlers", () => {
     const released = await workerService.releaseDueJobs(ADMIN);
     expect(released).toBe(1);
     expect((await workerService.runNextJob(ADMIN))?.id).toBe("job_scheduled");
+  });
+});
+
+describe("weekly risk reports", () => {
+  it("generates one report per scope per week, however many times it is asked", async () => {
+    const teacher = await makeTeacher();
+    const section = await makeSection(teacher.id);
+    const student = await makeStudent();
+    await enrollmentService.enrollStudent(ADMIN, {
+      studentId: student.id,
+      classSectionId: section.id,
+      allowWaitlist: false
+    });
+
+    // Two requests in the same week, with the first fully processed in between —
+    // so the job-level idempotency key cannot be what saves us the second time.
+    await reportService.requestWeeklyRiskReport(ADMIN, { scopeType: "School", scopeId: null });
+    await workerService.runNextBatch(ADMIN, 10);
+    await reportService.requestWeeklyRiskReport(ADMIN, { scopeType: "School", scopeId: null });
+    await workerService.runNextBatch(ADMIN, 10);
+
+    const reports = await prisma.report.findMany({ where: { type: "weekly-risk" } });
+    expect(reports).toHaveLength(1);
+
+    const payload = reports[0]?.payload as unknown as WeeklyRiskReportPayload;
+    expect(payload.totals.students).toBe(1);
+    expect(payload.rows[0]?.studentId).toBe(student.id);
+    // Anchored to the week's Monday, not to "now minus seven days".
+    expect(reports[0]?.periodStart.getUTCDay()).toBe(1);
+  });
+
+  it("scopes a section report to that section's enrolled students", async () => {
+    const teacher = await makeTeacher();
+    const [inSection, elsewhere] = [await makeStudent(), await makeStudent()];
+    const section = await makeSection(teacher.id);
+    await enrollmentService.enrollStudent(ADMIN, {
+      studentId: inSection.id,
+      classSectionId: section.id,
+      allowWaitlist: false
+    });
+
+    await reportService.requestWeeklyRiskReport(ADMIN, { scopeType: "ClassSection", scopeId: section.id });
+    await workerService.runNextBatch(ADMIN, 10);
+
+    const report = await prisma.report.findFirstOrThrow({ where: { scopeType: "ClassSection" } });
+    const payload = report.payload as unknown as WeeklyRiskReportPayload;
+
+    expect(payload.rows.map((row) => row.studentId)).toEqual([inSection.id]);
+    expect(payload.rows.map((row) => row.studentId)).not.toContain(elsewhere.id);
+  });
+
+  it("refuses a report request from a Viewer", async () => {
+    await expect(
+      reportService.requestWeeklyRiskReport(VIEWER, { scopeType: "School", scopeId: null })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
 

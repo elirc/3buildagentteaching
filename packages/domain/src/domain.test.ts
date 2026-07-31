@@ -6,7 +6,12 @@ import {
   calculateNextRetryAt,
   calculateRubricScore,
   calculateWeightedGradeSummary,
+  buildWeeklyRiskReport,
   canAcquireJobLock,
+  diffReports,
+  isoWeek,
+  isoWeekRange,
+  weeklyReportKey,
   classifyPerformance,
   canRecordAttendance,
   canTransitionApproval,
@@ -631,6 +636,164 @@ describe("role permissions", () => {
     expect(canPerform({ id: "u", role: "SchoolManager" }, "log:manage")).toBe(false);
     expect(canPerform({ id: "u", role: "Advisor" }, "log:manage")).toBe(false);
     expect(canPerform({ id: "u", role: "Teacher" }, "log:manage")).toBe(false);
+  });
+});
+
+describe("weekly risk reports", () => {
+  const row = (overrides: Partial<Parameters<typeof buildWeeklyRiskReport>[0]["rows"][number]> = {}) => ({
+    studentId: "s1",
+    studentName: "Maya Johnson",
+    gradeLevel: 9,
+    riskScore: 40,
+    riskLevel: "Medium" as const,
+    primaryRiskAreas: ["Grades"],
+    gradeAverage: 68,
+    missingCount: 2,
+    absences: 1,
+    activeInterventionCount: 0,
+    advisorName: "Jordan Reyes",
+    ...overrides
+  });
+
+  const build = (rows: ReturnType<typeof row>[]) =>
+    buildWeeklyRiskReport({
+      scopeType: "School",
+      scopeId: null,
+      scopeLabel: "Whole school",
+      periodStart: new Date("2026-10-12T00:00:00.000Z"),
+      periodEnd: new Date("2026-10-18T23:59:59.999Z"),
+      rows
+    });
+
+  it("counts every risk band, including the ones with nobody in them", () => {
+    const payload = build([row({ riskLevel: "Critical", riskScore: 90 }), row({ studentId: "s2", riskLevel: "Low", riskScore: 10 })]);
+
+    // A band reading 0 is information. A missing key is a rendering bug waiting
+    // to happen in whatever reads this payload back out of a Json column.
+    expect(payload.totals.byLevel).toEqual({ Low: 1, Medium: 0, High: 0, Critical: 1 });
+    expect(payload.totals.averageRiskScore).toBe(50);
+    expect(payload.totals.students).toBe(2);
+  });
+
+  it("sorts worst first so the report starts where the attention is needed", () => {
+    const payload = build([
+      row({ studentId: "s1", studentName: "Low risk", riskScore: 10 }),
+      row({ studentId: "s2", studentName: "High risk", riskScore: 85 })
+    ]);
+
+    expect(payload.rows.map((entry) => entry.studentName)).toEqual(["High risk", "Low risk"]);
+  });
+
+  it("reports no average for an empty scope rather than zero", () => {
+    // Zero would read as "everyone is fine", which is a different claim from
+    // "there is nobody here".
+    expect(build([]).totals.averageRiskScore).toBeNull();
+  });
+});
+
+describe("report diffing", () => {
+  const payload = (rows: Array<{ id: string; name: string; score: number; level: "Low" | "Medium" | "High" | "Critical" }>) =>
+    buildWeeklyRiskReport({
+      scopeType: "School",
+      scopeId: null,
+      scopeLabel: "Whole school",
+      periodStart: new Date("2026-10-12T00:00:00.000Z"),
+      periodEnd: new Date("2026-10-18T23:59:59.999Z"),
+      rows: rows.map((entry) => ({
+        studentId: entry.id,
+        studentName: entry.name,
+        gradeLevel: 9,
+        riskScore: entry.score,
+        riskLevel: entry.level,
+        primaryRiskAreas: [],
+        gradeAverage: 70,
+        missingCount: 0,
+        absences: 0,
+        activeInterventionCount: 0,
+        advisorName: null
+      }))
+    });
+
+  it("identifies a student who moved Medium to High as newly elevated", () => {
+    const before = payload([{ id: "s1", name: "Maya", score: 40, level: "Medium" }]);
+    const after = payload([{ id: "s1", name: "Maya", score: 65, level: "High" }]);
+
+    const diff = diffReports(before, after);
+    expect(diff.newlyElevated.map((entry) => entry.studentId)).toEqual(["s1"]);
+    expect(diff.newlyElevated[0]?.delta).toBe(25);
+    expect(diff.improved).toEqual([]);
+  });
+
+  it("identifies a student who left Critical as improved", () => {
+    const before = payload([{ id: "s1", name: "Maya", score: 85, level: "Critical" }]);
+    const after = payload([{ id: "s1", name: "Maya", score: 30, level: "Low" }]);
+
+    const diff = diffReports(before, after);
+    expect(diff.improved.map((entry) => entry.studentId)).toEqual(["s1"]);
+    expect(diff.improved[0]?.delta).toBe(-55);
+  });
+
+  it("does not report a newly enrolled student as an escalation", () => {
+    /*
+     * The distinction that matters: appearing for the first time at Critical is
+     * not the same event as *becoming* Critical. Conflating them sends an
+     * advisor looking for something that happened this week when the student
+     * simply enrolled.
+     */
+    const before = payload([]);
+    const after = payload([{ id: "s2", name: "Noah", score: 90, level: "Critical" }]);
+
+    const diff = diffReports(before, after);
+    expect(diff.added.map((entry) => entry.studentId)).toEqual(["s2"]);
+    expect(diff.newlyElevated).toEqual([]);
+  });
+
+  it("treats a first-ever report as all additions and no escalations", () => {
+    const diff = diffReports(null, payload([{ id: "s1", name: "Maya", score: 90, level: "Critical" }]));
+
+    expect(diff.added).toHaveLength(1);
+    expect(diff.newlyElevated).toEqual([]);
+    expect(diff.biggestMovers).toEqual([]);
+  });
+
+  it("ranks movers by the size of the change, ignoring students who did not move", () => {
+    const before = payload([
+      { id: "s1", name: "Small", score: 40, level: "Medium" },
+      { id: "s2", name: "Big", score: 20, level: "Low" },
+      { id: "s3", name: "Static", score: 50, level: "Medium" }
+    ]);
+    const after = payload([
+      { id: "s1", name: "Small", score: 45, level: "Medium" },
+      { id: "s2", name: "Big", score: 70, level: "High" },
+      { id: "s3", name: "Static", score: 50, level: "Medium" }
+    ]);
+
+    const diff = diffReports(before, after);
+    expect(diff.biggestMovers.map((entry) => entry.studentId)).toEqual(["s2", "s1"]);
+  });
+});
+
+describe("ISO week keys and ranges", () => {
+  it("gives the same key for two days in the same week", () => {
+    // Two people pressing Generate on Tuesday and Thursday mean one report.
+    expect(weeklyReportKey(null, new Date("2026-10-13T09:00:00.000Z")))
+      .toBe(weeklyReportKey(null, new Date("2026-10-15T17:00:00.000Z")));
+  });
+
+  it("handles the new-year boundary, where a naive day-count would not", () => {
+    // 1 Jan 2027 is a Friday, so it belongs to the ISO week that started
+    // Monday 28 December 2026 — and must key to the same week as that Monday.
+    expect(isoWeek(new Date("2027-01-01T00:00:00.000Z")))
+      .toBe(isoWeek(new Date("2026-12-28T00:00:00.000Z")));
+  });
+
+  it("anchors the range to Monday so the same week always agrees on its bounds", () => {
+    const tuesday = isoWeekRange(new Date("2026-10-13T14:30:00.000Z"));
+    const thursday = isoWeekRange(new Date("2026-10-15T02:00:00.000Z"));
+
+    expect(tuesday.periodStart.toISOString()).toBe("2026-10-12T00:00:00.000Z");
+    expect(tuesday.periodStart.getTime()).toBe(thursday.periodStart.getTime());
+    expect(tuesday.periodEnd.toISOString()).toBe("2026-10-18T23:59:59.999Z");
   });
 });
 

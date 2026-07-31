@@ -239,3 +239,58 @@ export function parseEnumParam<T extends string>(value: string | undefined, allo
   if (!value) return undefined;
   return (allowed as readonly string[]).includes(value) ? (value as T) : undefined;
 }
+
+/* ------------------------------------------------------------------ *
+ * CSV export
+ * ------------------------------------------------------------------ */
+
+export interface CsvColumn<T> {
+  header: string;
+  value: (row: T) => string | number | null | undefined;
+}
+
+/**
+ * Renders rows as CSV, escaping the four things that break a CSV file and the
+ * one thing that turns it into an attack.
+ *
+ * The mechanical part is RFC 4180: a value containing a comma, a quote or a
+ * newline is wrapped in quotes, and quotes inside it are doubled. Miss any of
+ * those and the file silently shifts every subsequent column by one — silently
+ * being the problem, because a spreadsheet opens it happily and the numbers are
+ * simply in the wrong places.
+ *
+ * The security part is **formula injection**, and it is the reason this
+ * function exists rather than a one-line `rows.map(r => r.join(","))`. A cell
+ * beginning `=`, `+`, `-` or `@` is interpreted as a formula by Excel, Sheets
+ * and LibreOffice. A student called `=cmd|'/c calc'!A0`, or a support note
+ * pasted from somewhere hostile, becomes executable the moment an administrator
+ * opens the export. Prefixing a single quote is the standard defusal: the cell
+ * displays as text and the formula never evaluates.
+ *
+ * Note the `-` in that list. It means a legitimately negative number gets the
+ * prefix too. That is the right trade — a mildly ugly "'-5" beats a document
+ * that runs code — and it is why the prefix is applied to the *rendered string*
+ * rather than to values we believe are numeric.
+ */
+export function toCsv<T>(rows: readonly T[], columns: ReadonlyArray<CsvColumn<T>>): string {
+  const lines = [columns.map((column) => escapeCsvValue(column.header)).join(",")];
+  for (const row of rows) {
+    lines.push(columns.map((column) => escapeCsvValue(column.value(row))).join(","));
+  }
+  // CRLF per RFC 4180. Excel on Windows is the overwhelmingly common consumer
+  // and it is the one that cares.
+  return lines.join("\r\n");
+}
+
+export function escapeCsvValue(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "";
+
+  let text = String(value);
+  if (/^[=+\-@\t\r]/.test(text)) {
+    text = `'${text}`;
+  }
+  if (/[",\r\n]/.test(text)) {
+    text = `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}

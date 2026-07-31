@@ -10,6 +10,7 @@ export * from "./log-retention";
 export * from "./notification-routing";
 export * from "./notifications";
 export * from "./permissions";
+export * from "./reports";
 export * from "./risk";
 export * from "./rubrics";
 export * from "./validation";

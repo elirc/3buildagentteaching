@@ -3,8 +3,10 @@ import {
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
   buildPagination,
+  escapeCsvValue,
   parseEnumParam,
   parseListParams,
+  toCsv,
   withParam
 } from "./index";
 
@@ -117,5 +119,68 @@ describe("parseEnumParam", () => {
     expect(parseEnumParam("DROP", statuses)).toBeUndefined();
     expect(parseEnumParam("", statuses)).toBeUndefined();
     expect(parseEnumParam(undefined, statuses)).toBeUndefined();
+  });
+});
+
+describe("escapeCsvValue", () => {
+  it("quotes values containing a comma, a quote, or a newline", () => {
+    expect(escapeCsvValue("Johnson, Maya")).toBe('"Johnson, Maya"');
+    expect(escapeCsvValue('She said "hello"')).toBe('"She said ""hello"""');
+    expect(escapeCsvValue("line one\nline two")).toBe('"line one\nline two"');
+  });
+
+  it("leaves ordinary values alone", () => {
+    expect(escapeCsvValue("Maya Johnson")).toBe("Maya Johnson");
+    expect(escapeCsvValue(88)).toBe("88");
+    expect(escapeCsvValue(null)).toBe("");
+    expect(escapeCsvValue(undefined)).toBe("");
+  });
+
+  it("neutralises formula injection", () => {
+    /*
+     * The attack: a value beginning =, +, - or @ is evaluated as a formula by
+     * Excel, Sheets and LibreOffice. A student name or a support note pasted
+     * from somewhere hostile becomes executable the moment an administrator
+     * opens the export. A leading apostrophe makes the cell text.
+     */
+    // Note it is *not* quoted: single quotes and pipes are not CSV-special, so
+    // the prefix alone is the whole defusal. Quoting it as well would be
+    // harmless but would mean the escaping rule and the injection rule had been
+    // conflated, and only one of them is about CSV syntax.
+    expect(escapeCsvValue("=cmd|'/c calc'!A0")).toBe("'=cmd|'/c calc'!A0");
+    expect(escapeCsvValue("+1234")).toBe("'+1234");
+    // Both rules together: the leading = is defused *and* the comma is quoted.
+    expect(escapeCsvValue("=SUM(1,2)")).toBe(`"'=SUM(1,2)"`);
+    expect(escapeCsvValue("@SUM(A1:A9)")).toBe("'@SUM(A1:A9)");
+    // Negative numbers get the prefix too. Slightly ugly output beats a
+    // document that can run code, and the rule has to be about the leading
+    // character rather than about what we believe the type to be.
+    expect(escapeCsvValue("-5")).toBe("'-5");
+  });
+});
+
+describe("toCsv", () => {
+  it("renders a header row and one row per record, CRLF separated", () => {
+    const rows = [
+      { name: "Maya Johnson", score: 88 },
+      { name: "Liam Brooks", score: null }
+    ];
+    const csv = toCsv(rows, [
+      { header: "Student", value: (row) => row.name },
+      { header: "Score", value: (row) => row.score }
+    ]);
+
+    expect(csv).toBe("Student,Score\r\nMaya Johnson,88\r\nLiam Brooks,");
+  });
+
+  it("escapes headers as well as values", () => {
+    // Headers are usually literals, but they are not always: a column per
+    // grading period takes its name from user data.
+    const csv = toCsv([{ v: 1 }], [{ header: 'Q1, "midterm"', value: (row) => row.v }]);
+    expect(csv.split("\r\n")[0]).toBe('"Q1, ""midterm"""');
+  });
+
+  it("produces only a header row for an empty set", () => {
+    expect(toCsv([], [{ header: "Student", value: () => "" }])).toBe("Student");
   });
 });

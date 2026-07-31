@@ -49,6 +49,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Gradebook", href: "/gradebook", roles: STAFF_AND_VIEWER },
   { label: "Attendance", href: "/attendance", roles: STAFF_AND_VIEWER },
   { label: "At-Risk Students", href: "/at-risk", roles: STAFF_AND_VIEWER },
+  { label: "Reports", href: "/reports", roles: SUPPORT },
   { label: "Interventions", href: "/interventions", roles: [...SUPPORT, "Teacher", "Viewer"] },
   { label: "Approvals", href: "/approvals", roles: SUPPORT },
   { label: "Guardians", href: "/guardians", roles: SUPPORT },

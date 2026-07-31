@@ -189,6 +189,9 @@ export const recommendationDecisionSchema = z.enum(recommendationDecisions);
  * shape, the domain rule owns the policy, and the service checks the rule
  * regardless of who called it.
  */
+/** Report scopes. Restated here rather than imported so domain stays Prisma-free. */
+export const reportScopeSchema = z.enum(["School", "ClassSection", "Advisor"]);
+
 export const logRetentionDaysSchema = z.coerce
   .number({ message: "Retention must be a number of days." })
   .int({ message: "Retention must be a whole number of days." })

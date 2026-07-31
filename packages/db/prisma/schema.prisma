@@ -616,6 +616,27 @@ model Notification {
   @@index([type])
 }
 
+/// A point-in-time snapshot, not a query.
+///
+/// The rows are stored as rendered Json rather than as ids to recompute from,
+/// because "what did the at-risk list look like on 14 October" cannot be
+/// answered by re-running today's calculation over today's grades. A report
+/// that changes when you re-read it is not a report.
+model Report {
+  id          String   @id @default(cuid())
+  type        String
+  scopeType   String
+  scopeId     String?
+  periodStart DateTime
+  periodEnd   DateTime
+  payload     Json
+  generatedAt DateTime @default(now())
+  jobId       String?
+
+  @@index([type, periodStart])
+  @@index([type, scopeType, scopeId, periodStart])
+}
+
 model StructuredLog {
   id          String         @id @default(cuid())
   timestamp   DateTime       @default(now())
