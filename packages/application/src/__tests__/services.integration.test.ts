@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@agentic-edu/db";
+import { academicOperationsService } from "../services/academic-operations-service";
 import { academicService } from "../services/academic-service";
+import { agentRunService } from "../services/agent-run-service";
 import { assignmentService } from "../services/assignment-service";
+import { studentService } from "../services/student-service";
 import { enrollmentService } from "../services/enrollment-service";
 import { jobService } from "../services/job-service";
 import { logService } from "../services/log-service";
@@ -696,6 +699,115 @@ describe("workerService with real handlers", () => {
     const released = await workerService.releaseDueJobs(ADMIN);
     expect(released).toBe(1);
     expect((await workerService.runNextJob(ADMIN))?.id).toBe("job_scheduled");
+  });
+});
+
+describe("guardian records are the only source of truth", () => {
+  const newStudent = (overrides: { studentNumber: string; email: string; guardianEmail: string; guardianName?: string }) => ({
+    firstName: "Maya",
+    lastName: "Johnson",
+    email: overrides.email,
+    gradeLevel: 9,
+    enrollmentStatus: "Active" as const,
+    studentNumber: overrides.studentNumber,
+    primaryGuardian: { name: overrides.guardianName ?? "Denise Johnson", email: overrides.guardianEmail }
+  });
+
+  it("creates the student and their primary guardian link in one go", async () => {
+    const student = await studentService.createStudent(
+      ADMIN,
+      newStudent({ studentNumber: "NS-2001", email: "a@student.example", guardianEmail: "denise@guardian.example" })
+    );
+
+    const links = await prisma.studentGuardian.findMany({
+      where: { studentId: student.id },
+      include: { guardian: true }
+    });
+
+    expect(links).toHaveLength(1);
+    expect(links[0]?.isPrimary).toBe(true);
+    expect(links[0]?.guardian.email).toBe("denise@guardian.example");
+    expect(links[0]?.guardian.firstName).toBe("Denise");
+    expect(links[0]?.guardian.lastName).toBe("Johnson");
+  });
+
+  it("links an existing guardian rather than duplicating them, ignoring case", async () => {
+    const first = await studentService.createStudent(
+      ADMIN,
+      newStudent({ studentNumber: "NS-2002", email: "b@student.example", guardianEmail: "shared@guardian.example" })
+    );
+    const second = await studentService.createStudent(
+      ADMIN,
+      // Same person, typed differently. Guardian.email is unique, so without the
+      // case-insensitive match this either duplicates a parent or fails outright.
+      newStudent({ studentNumber: "NS-2003", email: "c@student.example", guardianEmail: "  Shared@Guardian.Example  " })
+    );
+
+    const guardians = await prisma.guardian.findMany({ where: { email: { contains: "shared", mode: "insensitive" } } });
+    expect(guardians).toHaveLength(1);
+
+    const links = await prisma.studentGuardian.findMany({ where: { guardianId: guardians[0]?.id } });
+    expect(links.map((link) => link.studentId).sort()).toEqual([first.id, second.id].sort());
+  });
+
+  it("demotes the previous primary when a second link is made primary", async () => {
+    const student = await studentService.createStudent(
+      ADMIN,
+      newStudent({ studentNumber: "NS-2004", email: "d@student.example", guardianEmail: "first@guardian.example" })
+    );
+
+    const second = await academicOperationsService.addGuardianToStudent(ADMIN, {
+      studentId: student.id,
+      name: "Harper Brooks",
+      email: "second@guardian.example",
+      relationship: "Father",
+      isPrimary: true,
+      receivesDigest: true
+    });
+
+    const links = await prisma.studentGuardian.findMany({ where: { studentId: student.id } });
+    expect(links).toHaveLength(2);
+    expect(links.filter((link) => link.isPrimary).map((link) => link.id)).toEqual([second.id]);
+  });
+
+  it("refuses to unlink the last guardian, and promotes a replacement when the primary goes", async () => {
+    const student = await studentService.createStudent(
+      ADMIN,
+      newStudent({ studentNumber: "NS-2005", email: "e@student.example", guardianEmail: "only@guardian.example" })
+    );
+    const [onlyLink] = await prisma.studentGuardian.findMany({ where: { studentId: student.id } });
+
+    await expect(
+      academicOperationsService.unlinkGuardianFromStudent(ADMIN, onlyLink!.id)
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    await academicOperationsService.addGuardianToStudent(ADMIN, {
+      studentId: student.id,
+      name: "Harper Brooks",
+      email: "backup@guardian.example",
+      relationship: "Father",
+      isPrimary: false,
+      receivesDigest: true
+    });
+    await academicOperationsService.unlinkGuardianFromStudent(ADMIN, onlyLink!.id);
+
+    const remaining = await prisma.studentGuardian.findMany({ where: { studentId: student.id } });
+    expect(remaining).toHaveLength(1);
+    // Removing the primary must not leave the student without one: the
+    // communication draft agent now refuses to run in that state.
+    expect(remaining[0]?.isPrimary).toBe(true);
+  });
+
+  it("refuses to draft a guardian message for a student with no guardian", async () => {
+    // makeStudent creates no guardian link, which is only reachable through a
+    // fixture or a pre-US-14 row. The agent must report it rather than draft to
+    // an address it invented.
+    const orphan = await makeStudent();
+
+    await expect(agentRunService.runGuardianCommunicationDraftAgent(ADMIN, orphan.id)).rejects.toMatchObject({
+      code: "VALIDATION_ERROR"
+    });
+    expect(await prisma.agentRun.count({ where: { targetId: orphan.id } })).toBe(0);
   });
 });
 

@@ -33,11 +33,37 @@ export async function makeStudent(overrides: { id?: string; enrollmentStatus?: "
       email: `${id}@student.example`,
       gradeLevel: 9,
       enrollmentStatus: overrides.enrollmentStatus ?? "Active",
-      studentNumber: id,
-      guardianName: "Denise Johnson",
-      guardianEmail: `${id}.guardian@example.com`
+      studentNumber: id
     }
   });
+}
+
+/**
+ * A student with a linked primary guardian.
+ *
+ * Separate from makeStudent because most tests do not care about guardians and
+ * a fixture that creates rows nobody asked for makes it harder to see what a
+ * test actually depends on. The ones that do care say so by calling this.
+ */
+export async function makeStudentWithGuardian(
+  overrides: { id?: string; guardianEmail?: string; receivesDigest?: boolean } = {}
+) {
+  const student = await makeStudent({ id: overrides.id });
+  const email = overrides.guardianEmail ?? `${student.id}.guardian@example.com`;
+  const guardian = await prisma.guardian.create({
+    data: { firstName: "Denise", lastName: "Johnson", email }
+  });
+  const link = await prisma.studentGuardian.create({
+    data: {
+      studentId: student.id,
+      guardianId: guardian.id,
+      relationship: "Mother",
+      isPrimary: true,
+      receivesDigest: overrides.receivesDigest ?? true,
+      emergencyContact: true
+    }
+  });
+  return { student, guardian, link };
 }
 
 export async function makeSection(teacherId: string, overrides: { capacity?: number; status?: "Planned" | "Active" | "Completed" | "Cancelled" } = {}) {
