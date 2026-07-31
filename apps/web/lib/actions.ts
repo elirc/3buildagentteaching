@@ -877,8 +877,7 @@ function parseSection(formData: FormData) {
   return classSectionSchema.parse({
     courseId: stringValue(formData, "courseId"),
     teacherId: stringValue(formData, "teacherId"),
-    academicTermId: optionalString(formData, "academicTermId"),
-    term: stringValue(formData, "term"),
+    academicTermId: stringValue(formData, "academicTermId"),
     room: stringValue(formData, "room"),
     schedule: {
       days: splitList(stringValue(formData, "days")),

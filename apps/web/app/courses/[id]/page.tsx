@@ -7,7 +7,7 @@ import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function CourseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const course = await prisma.course.findUnique({ where: { id }, include: { sections: { include: { teacher: true, enrollments: true } } } });
+  const course = await prisma.course.findUnique({ where: { id }, include: { sections: { include: { teacher: true, academicTerm: true, enrollments: true } } } });
   if (!course) notFound();
 
   return (
@@ -26,7 +26,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
             <tbody>
               {course.sections.map((section) => (
                 <tr key={section.id}>
-                  <td><a href={`/sections/${section.id}`}>{section.term}</a></td>
+                  <td><a href={`/sections/${section.id}`}>{section.academicTerm.name}</a></td>
                   <td>{section.teacher.firstName} {section.teacher.lastName}</td>
                   <td><StatusBadge value={section.status} /></td>
                   <td>{section.enrollments.filter((enrollment) => enrollment.status === "Enrolled").length}/{section.capacity}</td>

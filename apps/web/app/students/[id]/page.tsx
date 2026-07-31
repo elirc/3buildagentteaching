@@ -48,7 +48,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                     <td><a href={`/sections/${enrollment.classSection.id}`}>{enrollment.classSection.course.title}</a></td>
                     <td>{enrollment.classSection.teacher.firstName} {enrollment.classSection.teacher.lastName}</td>
                     <td><StatusBadge value={enrollment.status} /></td>
-                    <td>{enrollment.classSection.term}</td>
+                    <td>{enrollment.classSection.academicTerm.name}</td>
                   </tr>
                 ))}
               </tbody>

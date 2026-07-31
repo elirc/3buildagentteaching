@@ -40,7 +40,7 @@ export default async function SectionAttendancePage({
     <>
       <PageHeader
         title={`Attendance · ${section.course.title}`}
-        description={`${section.term} · Room ${section.room} · ${section.teacher.firstName} ${section.teacher.lastName}`}
+        description={`${section.academicTerm.name} · Room ${section.room} · ${section.teacher.firstName} ${section.teacher.lastName}`}
         actions={<a className="ui-button ui-button--secondary" href={`/sections/${section.id}`}>Back to section</a>}
       />
 

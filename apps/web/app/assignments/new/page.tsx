@@ -5,7 +5,7 @@ import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export default async function NewAssignmentPage() {
   const [sections, teachers, gradingPeriods] = await Promise.all([
-    prisma.classSection.findMany({ include: { course: true }, orderBy: { term: "desc" } }),
+    prisma.classSection.findMany({ include: { course: true, academicTerm: true }, orderBy: { academicTerm: { startsAt: "desc" } } }),
     prisma.teacher.findMany({ where: { employmentStatus: "Active" }, orderBy: { lastName: "asc" } }),
     prisma.gradingPeriod.findMany({ include: { academicTerm: true }, orderBy: { startsAt: "desc" } })
   ]);
@@ -16,7 +16,12 @@ export default async function NewAssignmentPage() {
         <CardHeader title="Assignment details" />
         <ActionForm action={createAssignment} className="stack">
           <div className="form-grid">
-            <Field label="Section"><select name="classSectionId">{sections.map((section) => <option key={section.id} value={section.id}>{section.course.title} · {section.term}</option>)}</select></Field>
+            <Field label="Section"><select name="classSectionId">{sections.map((section) => <option key={section.id} value={section.id}>{section.course.title} · {section.academicTerm.name}</option>)}</select></Field>
+            {/* Every period from every term is listed with its term name, and
+                the service refuses one that does not belong to the chosen
+                section's term. Filtering this list as the section changes needs
+                client state; naming the term in each option is what makes the
+                right choice obvious without it. */}
             <Field label="Grading period">
               <select name="gradingPeriodId">
                 <option value="">None</option>

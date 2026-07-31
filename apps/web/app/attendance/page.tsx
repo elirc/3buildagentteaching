@@ -10,7 +10,7 @@ export default async function AttendancePage() {
   const [records, students, sections, teachers, latestRuns] = await Promise.all([
     prisma.attendanceRecord.findMany({ include: { student: true, classSection: { include: { course: true } } }, orderBy: { date: "desc" }, take: 80 }),
     prisma.student.findMany({ orderBy: { lastName: "asc" } }),
-    prisma.classSection.findMany({ include: { course: true }, orderBy: { term: "desc" } }),
+    prisma.classSection.findMany({ include: { course: true, academicTerm: true }, orderBy: { academicTerm: { startsAt: "desc" } } }),
     prisma.teacher.findMany({ orderBy: { lastName: "asc" } }),
     prisma.agentRun.findMany({ where: { agentType: "AttendanceAnomaly" }, orderBy: { createdAt: "desc" }, take: 5 })
   ]);
