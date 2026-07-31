@@ -1,4 +1,4 @@
-import { Card, CardHeader, DataTable, PageHeader } from "@agentic-edu/ui";
+import { Card, CardHeader, DataTable, LinkButton, PageHeader } from "@agentic-edu/ui";
 import { getSectionGradebook } from "@agentic-edu/application";
 import { StatusBadge } from "@/components/status-badge";
 import { percent } from "@/lib/format";
@@ -8,7 +8,11 @@ export default async function GradebookPage() {
 
   return (
     <>
-      <PageHeader title="Gradebook" description="Section-level grade summaries calculated by domain logic, not React components." />
+      <PageHeader
+        title="Gradebook"
+        description="Section-level grade summaries calculated by domain logic, not React components."
+        actions={<LinkButton href="/api/export/gradebook" variant="secondary">Export CSV</LinkButton>}
+      />
       <div className="stack">
         {gradebooks.map(({ section, rows, periods, weightReport, classAverage }) => {
           const weighted = periods.length > 0;

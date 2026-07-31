@@ -1,4 +1,4 @@
-import { Card, CardHeader, DataTable, PageHeader } from "@agentic-edu/ui";
+import { Card, CardHeader, DataTable, LinkButton, PageHeader } from "@agentic-edu/ui";
 import { getAtRiskStudentQueue } from "@agentic-edu/application";
 import { StatusBadge } from "@/components/status-badge";
 import { percent } from "@/lib/format";
@@ -10,7 +10,11 @@ export default async function AtRiskPage() {
 
   return (
     <>
-      <PageHeader title="At-Risk Students" description="Advisor dashboard for academic, attendance, and engagement risk signals." />
+      <PageHeader
+        title="At-Risk Students"
+        description="Advisor dashboard for academic, attendance, and engagement risk signals."
+        actions={<LinkButton href="/api/export/at-risk" variant="secondary">Export CSV</LinkButton>}
+      />
       <Card>
         <CardHeader title="Risk Queue" />
         <DataTable>

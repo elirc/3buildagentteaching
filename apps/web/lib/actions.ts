@@ -12,6 +12,7 @@ import {
   enrollmentService,
   jobService,
   logService,
+  reportService,
   studentService,
   supportService,
   teacherService,
@@ -31,6 +32,7 @@ import {
   interventionStatusSchema,
   logRetentionDaysSchema,
   recommendationDecisionSchema,
+  reportScopeSchema,
   studentCreateSchema,
   studentSchema,
   supportNoteSchema,
@@ -778,6 +780,35 @@ export async function purgeStructuredLogs(_previous: FormState, formData: FormDa
     const result = await logService.purgeOlderThan(actor, days);
     revalidatePath("/logs");
     return result;
+  });
+}
+
+/**
+ * Queues a weekly risk report.
+ *
+ * The scope arrives as one select value ("School", "ClassSection:<id>",
+ * "Advisor:<id>") rather than two coupled fields, because a scope type with the
+ * wrong kind of id is not a state worth representing. Splitting on the first
+ * colon keeps the pair inseparable from the form to the service.
+ */
+export async function generateWeeklyRiskReport(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const raw = stringValue(formData, "scope");
+    const [scopeTypeRaw, scopeId] = raw.split(":");
+    const scopeType = reportScopeSchema.parse(scopeTypeRaw);
+
+    if (scopeType !== "School" && !scopeId) {
+      throw new AppError("VALIDATION_ERROR", "Choose which section or advisor to report on.", { scope: raw });
+    }
+
+    const job = await reportService.requestWeeklyRiskReport(actor, {
+      scopeType,
+      scopeId: scopeType === "School" ? null : scopeId ?? null
+    });
+    revalidatePath("/reports");
+    revalidatePath("/worker-jobs");
+    return job;
   });
 }
 
