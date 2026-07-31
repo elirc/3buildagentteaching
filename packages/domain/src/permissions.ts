@@ -1,40 +1,54 @@
 import type { UserRole } from "@agentic-edu/shared";
 
-export type PermissionAction =
-  | "teacher:create"
-  | "teacher:update"
-  | "student:create"
-  | "student:update"
-  | "course:create"
-  | "course:update"
-  | "section:create"
-  | "section:update"
-  | "enrollment:manage"
-  | "enrollment:promote"
-  | "assignment:create"
-  | "assignment:update"
-  | "assignment:publish"
-  | "submission:create"
-  | "submission:grade"
-  | "attendance:record"
-  | "supportNote:create"
-  | "intervention:create"
-  | "intervention:update"
-  | "intervention:approve"
-  | "term:manage"
-  | "guardian:manage"
-  | "rubric:manage"
-  | "notification:manage"
-  | "job:retry"
-  | "job:deadLetter"
-  | "job:runWorker"
-  | "agent:run"
-  | "agentManifest:manage"
-  | "agentRecommendation:decide"
-  | "guardian:viewOwnStudents"
-  | "guardian:updateOwnPreferences"
-  | "notification:readOwn"
-  | "log:manage";
+/**
+ * Every permission the system knows about, as data.
+ *
+ * The type is derived from this array rather than declared beside it, so the
+ * two cannot drift. That matters as of US-17: `AgentManifest.requiredPermissions`
+ * is a `String[]` in the database, and the manifest gate checks each entry
+ * against this list before enforcing it. Without a runtime list there is
+ * nothing to check against, and a typo in a manifest would silently mean "no
+ * permission required" — the failure mode where a security control quietly
+ * stops applying.
+ */
+export const PERMISSION_ACTIONS = [
+  "teacher:create",
+  "teacher:update",
+  "student:create",
+  "student:update",
+  "course:create",
+  "course:update",
+  "section:create",
+  "section:update",
+  "enrollment:manage",
+  "enrollment:promote",
+  "assignment:create",
+  "assignment:update",
+  "assignment:publish",
+  "submission:create",
+  "submission:grade",
+  "attendance:record",
+  "supportNote:create",
+  "intervention:create",
+  "intervention:update",
+  "intervention:approve",
+  "term:manage",
+  "guardian:manage",
+  "rubric:manage",
+  "notification:manage",
+  "job:retry",
+  "job:deadLetter",
+  "job:runWorker",
+  "agent:run",
+  "agentManifest:manage",
+  "agentRecommendation:decide",
+  "guardian:viewOwnStudents",
+  "guardian:updateOwnPreferences",
+  "notification:readOwn",
+  "log:manage"
+] as const;
+
+export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
 
 export interface PermissionActor {
   id: string;
