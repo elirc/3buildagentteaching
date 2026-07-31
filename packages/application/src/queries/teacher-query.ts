@@ -5,7 +5,7 @@ export async function getTeacherProfile(teacherId: string) {
   const teacher = await prisma.teacher.findUnique({
     where: { id: teacherId },
     include: {
-      sections: { include: { course: true, enrollments: { include: { student: true } }, assignments: { include: { submissions: true } } } },
+      sections: { include: { course: true, academicTerm: true, enrollments: { include: { student: true } }, assignments: { include: { submissions: true } } } },
       attendanceRecords: { take: 8, orderBy: { date: "desc" } }
     }
   });

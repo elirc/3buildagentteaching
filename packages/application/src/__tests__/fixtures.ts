@@ -66,7 +66,31 @@ export async function makeStudentWithGuardian(
   return { student, guardian, link };
 }
 
-export async function makeSection(teacherId: string, overrides: { capacity?: number; status?: "Planned" | "Active" | "Completed" | "Cancelled" } = {}) {
+/**
+ * A term wide enough that no fixture's dates fall outside it.
+ *
+ * Assignment due dates are validated against the section's term as of US-15, so
+ * a narrow fixture term would make unrelated tests fail with a date error. One
+ * term is reused across sections — created on demand, hence upsert, because
+ * every test file truncates.
+ */
+export async function makeTerm(overrides: { id?: string; name?: string; startsAt?: Date; endsAt?: Date } = {}) {
+  const id = overrides.id ?? "term_fixture";
+  const data = {
+    id,
+    name: overrides.name ?? "Fixture Term",
+    status: "Active" as const,
+    startsAt: overrides.startsAt ?? new Date("2020-01-01T00:00:00.000Z"),
+    endsAt: overrides.endsAt ?? new Date("2030-12-31T00:00:00.000Z")
+  };
+  return prisma.academicTerm.upsert({ where: { id }, create: data, update: data });
+}
+
+export async function makeSection(
+  teacherId: string,
+  overrides: { capacity?: number; status?: "Planned" | "Active" | "Completed" | "Cancelled"; academicTermId?: string } = {}
+) {
+  const term = overrides.academicTermId ? { id: overrides.academicTermId } : await makeTerm();
   const course = await prisma.course.create({
     data: {
       code: `MATH-${Math.random().toString(36).slice(2, 7)}`,
@@ -82,7 +106,7 @@ export async function makeSection(teacherId: string, overrides: { capacity?: num
     data: {
       courseId: course.id,
       teacherId,
-      term: "Fall 2026",
+      academicTermId: term.id,
       room: "214",
       schedule: { days: ["Mon"], start: "09:00", end: "09:55" },
       capacity: overrides.capacity ?? 2,

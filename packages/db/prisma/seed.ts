@@ -1,4 +1,4 @@
-﻿import { createHash } from "node:crypto";
+import { createHash } from "node:crypto";
 import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -231,7 +231,6 @@ async function main() {
         courseId: "course_algebra",
         teacherId: "teacher_algebra",
         academicTermId: "term_fall_2026",
-        term: "Fall 2026",
         room: "214",
         schedule: { days: ["Mon", "Wed", "Fri"], start: "09:00", end: "09:55" },
         capacity: 3,
@@ -242,7 +241,6 @@ async function main() {
         courseId: "course_biology",
         teacherId: "teacher_biology",
         academicTermId: "term_fall_2026",
-        term: "Fall 2026",
         room: "Lab 3",
         schedule: { days: ["Tue", "Thu"], start: "10:10", end: "11:30" },
         capacity: 28,
@@ -253,7 +251,6 @@ async function main() {
         courseId: "course_english",
         teacherId: "teacher_english",
         academicTermId: "term_fall_2026",
-        term: "Fall 2026",
         room: "108",
         schedule: { days: ["Mon", "Wed"], start: "13:00", end: "14:20" },
         capacity: 30,

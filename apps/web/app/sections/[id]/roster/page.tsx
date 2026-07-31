@@ -20,6 +20,7 @@ export default async function SectionRosterPage({ params }: { params: Promise<{ 
     include: {
       course: true,
       teacher: true,
+      academicTerm: true,
       enrollments: { include: { student: true }, orderBy: { enrolledAt: "asc" } }
     }
   });
@@ -44,7 +45,7 @@ export default async function SectionRosterPage({ params }: { params: Promise<{ 
     <>
       <PageHeader
         title={`Roster · ${section.course.title}`}
-        description={`${section.term} · ${section.teacher.firstName} ${section.teacher.lastName}`}
+        description={`${section.academicTerm.name} · ${section.teacher.firstName} ${section.teacher.lastName}`}
         actions={<a className="ui-button ui-button--secondary" href={`/sections/${section.id}/attendance`}>Take attendance</a>}
       />
 

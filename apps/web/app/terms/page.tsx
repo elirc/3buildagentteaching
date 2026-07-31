@@ -1,5 +1,6 @@
 import { Card, CardHeader, DataTable, Field, PageHeader, Stat } from "@agentic-edu/ui";
 import { getAcademicOperationsOverview } from "@agentic-edu/application";
+import { validateGradingPeriodWeights } from "@agentic-edu/domain";
 import { createAcademicTerm, createGradingPeriod } from "@/lib/actions";
 import { formatDate } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
@@ -51,23 +52,53 @@ export default async function TermsPage() {
         </ActionForm>
       </Card>
 
-      <Card>
-        <CardHeader title="Terms" />
-        <DataTable>
-          <thead><tr><th>Term</th><th>Status</th><th>Dates</th><th>Periods</th><th>Sections</th></tr></thead>
-          <tbody>
-            {overview.terms.map((term) => (
-              <tr key={term.id}>
-                <td>{term.name}</td>
-                <td><StatusBadge value={term.status} /></td>
-                <td>{formatDate(term.startsAt)} to {formatDate(term.endsAt)}</td>
-                <td>{term.gradingPeriods.map((period) => period.name).join(", ") || "None"}</td>
-                <td>{term.sections.map((section) => section.course.code).join(", ") || "None"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </DataTable>
-      </Card>
+      <div className="stack">
+        {overview.terms.map((term) => {
+          const weightReport = validateGradingPeriodWeights(
+            term.gradingPeriods.map((period) => ({ name: period.name, weight: period.weight }))
+          );
+          return (
+            <Card key={term.id}>
+              <CardHeader
+                title={term.name}
+                eyebrow={`${formatDate(term.startsAt)} to ${formatDate(term.endsAt)}`}
+                actions={<StatusBadge value={term.status} />}
+              >
+                {term.sections.length} section(s): {term.sections.map((section) => section.course.code).join(", ") || "none yet"}
+              </CardHeader>
+              {/* Flagged, not refused. A term being set up legitimately has
+                  weights that do not yet total 1, and the weighted average
+                  divides by the actual total anyway — so this is a "did you
+                  mean to leave it like that?", not an error. */}
+              {weightReport.valid ? null : (
+                <p className="form-error" role="alert"><strong>Check this:</strong> {weightReport.reason}</p>
+              )}
+              <DataTable>
+                <thead><tr><th>Grading period</th><th>Dates</th><th>Weight</th><th>Assignments</th></tr></thead>
+                <tbody>
+                  {term.gradingPeriods.map((period) => (
+                    <tr key={period.id}>
+                      <td>{period.name}</td>
+                      <td>{formatDate(period.startsAt)} to {formatDate(period.endsAt)}</td>
+                      <td>{Math.round(period.weight * 100)}%</td>
+                      {/* A period carrying weight but no assignments is a
+                          configuration mistake that is invisible until grades
+                          come out wrong. */}
+                      <td>
+                        {period._count.assignments}
+                        {period._count.assignments === 0 && period.weight > 0 ? <span className="muted"> · weighted but empty</span> : null}
+                      </td>
+                    </tr>
+                  ))}
+                  {term.gradingPeriods.length === 0 ? (
+                    <tr><td colSpan={4}>No grading periods. Averages in this term are a flat points-earned over points-possible.</td></tr>
+                  ) : null}
+                </tbody>
+              </DataTable>
+            </Card>
+          );
+        })}
+      </div>
     </>
   );
 }

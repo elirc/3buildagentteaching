@@ -4,8 +4,8 @@ import { StatusBadge } from "@/components/status-badge";
 
 export default async function SectionsPage() {
   const sections = await prisma.classSection.findMany({
-    include: { course: true, teacher: true, enrollments: true, assignments: true },
-    orderBy: [{ term: "desc" }, { room: "asc" }]
+    include: { course: true, teacher: true, academicTerm: true, enrollments: true, assignments: true },
+    orderBy: [{ academicTerm: { startsAt: "desc" } }, { room: "asc" }]
   });
   return (
     <>
@@ -19,7 +19,7 @@ export default async function SectionsPage() {
               <tr key={section.id}>
                 <td><a href={`/sections/${section.id}`}>{section.course.title}</a></td>
                 <td><a href={`/teachers/${section.teacher.id}`}>{section.teacher.firstName} {section.teacher.lastName}</a></td>
-                <td>{section.term}</td>
+                <td>{section.academicTerm.name}</td>
                 <td>{section.room}</td>
                 <td><StatusBadge value={section.status} /></td>
                 <td>{section.enrollments.filter((enrollment) => enrollment.status === "Enrolled").length}/{section.capacity}</td>

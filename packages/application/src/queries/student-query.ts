@@ -6,7 +6,7 @@ export async function getStudentProfile(studentId: string) {
     where: { id: studentId },
     include: {
       advisor: true,
-      enrollments: { include: { classSection: { include: { course: true, teacher: true } } } },
+      enrollments: { include: { classSection: { include: { course: true, teacher: true, academicTerm: true } } } },
       submissions: { include: { assignment: { include: { classSection: { include: { course: true } } } } } },
       attendanceRecords: { include: { classSection: { include: { course: true } } }, orderBy: { date: "desc" } },
       supportNotes: { include: { author: true }, orderBy: { createdAt: "desc" } },

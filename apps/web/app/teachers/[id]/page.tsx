@@ -41,7 +41,7 @@ export default async function TeacherDetailPage({ params }: { params: Promise<{ 
                 {teacher.sections.map((section) => (
                   <tr key={section.id}>
                     <td><a href={`/sections/${section.id}`}>{section.course.title}</a></td>
-                    <td>{section.term}</td>
+                    <td>{section.academicTerm.name}</td>
                     <td><StatusBadge value={section.status} /></td>
                     <td>{section.enrollments.filter((enrollment) => enrollment.status === "Enrolled").length}/{section.capacity}</td>
                   </tr>

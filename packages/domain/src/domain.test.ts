@@ -5,6 +5,7 @@ import {
   calculateGradeSummary,
   calculateNextRetryAt,
   calculateRubricScore,
+  calculateWeightedGradeSummary,
   canAcquireJobLock,
   classifyPerformance,
   canRecordAttendance,
@@ -33,7 +34,9 @@ import {
   studentSchema,
   summarizeAttendance,
   validateAcademicTerm,
+  validateAssignmentDueDate,
   validateGradingPeriod,
+  validateGradingPeriodWeights,
   validateScore
 } from "./index";
 
@@ -628,6 +631,106 @@ describe("role permissions", () => {
     expect(canPerform({ id: "u", role: "SchoolManager" }, "log:manage")).toBe(false);
     expect(canPerform({ id: "u", role: "Advisor" }, "log:manage")).toBe(false);
     expect(canPerform({ id: "u", role: "Teacher" }, "log:manage")).toBe(false);
+  });
+});
+
+describe("term calendar rules", () => {
+  const term = {
+    name: "Fall 2026",
+    startsAt: new Date("2026-08-17T00:00:00.000Z"),
+    endsAt: new Date("2026-12-18T00:00:00.000Z")
+  };
+
+  it("accepts a due date inside the term and names the term when it is outside", () => {
+    expect(validateAssignmentDueDate(new Date("2026-10-01T00:00:00.000Z"), term).valid).toBe(true);
+
+    const late = validateAssignmentDueDate(new Date("2027-01-05T00:00:00.000Z"), term);
+    expect(late.valid).toBe(false);
+    // The message has to say what the date is being compared against. "Invalid
+    // due date" sends the teacher to ask a colleague; this one does not.
+    expect(late.reason).toContain("Fall 2026");
+    expect(late.reason).toContain("2026-08-17");
+    expect(late.reason).toContain("2026-12-18");
+
+    expect(validateAssignmentDueDate(new Date("2026-08-01T00:00:00.000Z"), term).valid).toBe(false);
+  });
+
+  it("treats the term boundaries as inside the term", () => {
+    expect(validateAssignmentDueDate(term.startsAt, term).valid).toBe(true);
+    expect(validateAssignmentDueDate(term.endsAt, term).valid).toBe(true);
+  });
+
+  it("flags weights that do not sum to 1, and tolerates binary floating point", () => {
+    expect(validateGradingPeriodWeights([{ name: "Q1", weight: 0.5 }, { name: "Q2", weight: 0.4 }]).valid).toBe(false);
+    expect(validateGradingPeriodWeights([{ name: "Q1", weight: 0.5 }, { name: "Q2", weight: 0.5 }]).valid).toBe(true);
+
+    // 0.3 + 0.3 + 0.4 is 0.9999999999999999 in IEEE 754. Reporting that as a
+    // user error would be reporting a fault in binary floating point as a fault
+    // in someone's arithmetic.
+    expect(
+      validateGradingPeriodWeights([
+        { name: "Q1", weight: 0.3 },
+        { name: "Q2", weight: 0.3 },
+        { name: "Q3", weight: 0.4 }
+      ]).valid
+    ).toBe(true);
+
+    // No periods at all is not a misconfiguration — it is an unweighted term.
+    expect(validateGradingPeriodWeights([]).valid).toBe(true);
+  });
+});
+
+describe("weighted grade averages", () => {
+  const weights = new Map([["q1", 0.5], ["q2", 0.5]]);
+
+  it("weights periods equally regardless of how many points each holds", () => {
+    // Q1: one 10-point quiz, full marks. Q2: one 200-point exam, half marks.
+    // Flat: 110/210 = 52.4%. Weighted: (100 + 50) / 2 = 75%.
+    const summary = calculateWeightedGradeSummary(
+      [
+        { score: 10, pointsPossible: 10, status: "Graded", gradingPeriodId: "q1" },
+        { score: 100, pointsPossible: 200, status: "Graded", gradingPeriodId: "q2" }
+      ],
+      weights
+    );
+
+    expect(summary.average).toBeCloseTo(52.38, 1);
+    expect(summary.weightedAverage).toBeCloseTo(75, 5);
+  });
+
+  it("redistributes the weight of a period with no scored work", () => {
+    // Q2 has not started. A student who has done everything asked of them so
+    // far must not see a failing grade for a term that has not happened.
+    const summary = calculateWeightedGradeSummary(
+      [{ score: 9, pointsPossible: 10, status: "Graded", gradingPeriodId: "q1" }],
+      weights
+    );
+
+    expect(summary.weightedAverage).toBeCloseTo(90, 5);
+  });
+
+  it("falls back to the flat average when no weights are supplied", () => {
+    const scores = [{ score: 8, pointsPossible: 10, status: "Graded", gradingPeriodId: "q1" }];
+    const summary = calculateWeightedGradeSummary(scores, new Map());
+
+    expect(summary.weightedAverage).toBe(summary.average);
+    expect(summary.periods).toEqual([]);
+  });
+
+  it("reports unweighted work rather than dropping it", () => {
+    // Assignment.gradingPeriodId is optional, so this is a real state and not a
+    // defensive branch. The work must be visible in the breakdown.
+    const summary = calculateWeightedGradeSummary(
+      [
+        { score: 10, pointsPossible: 10, status: "Graded", gradingPeriodId: "q1" },
+        { score: 0, pointsPossible: 10, status: "Graded", gradingPeriodId: null }
+      ],
+      weights
+    );
+
+    expect(summary.weightedAverage).toBeCloseTo(100, 5);
+    expect(summary.average).toBeCloseTo(50, 5);
+    expect(summary.periods.find((period) => period.gradingPeriodId === "")).toMatchObject({ weight: 0, average: 0 });
   });
 });
 

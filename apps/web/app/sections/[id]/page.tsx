@@ -46,7 +46,7 @@ export default async function SectionDetailPage({ params }: { params: Promise<{ 
 
   return (
     <>
-      <PageHeader title={`${section.course.title} · ${section.term}`} description={`${section.course.code} in room ${section.room} with ${section.teacher.firstName} ${section.teacher.lastName}`} actions={<StatusBadge value={section.status} />} />
+      <PageHeader title={`${section.course.title} · ${section.academicTerm.name}`} description={`${section.course.code} in room ${section.room} with ${section.teacher.firstName} ${section.teacher.lastName}`} actions={<StatusBadge value={section.status} />} />
       <div className="metric-row">
         <Stat label="Roster" value={`${enrolled.length}/${section.capacity}`} tone={enrolled.length >= section.capacity ? "warn" : "info"} />
         <Stat label="Assignments" value={section.assignments.length} tone="info" />
@@ -111,13 +111,16 @@ export default async function SectionDetailPage({ params }: { params: Promise<{ 
               <input type="hidden" name="id" value={section.id} />
               <Field label="Course"><select name="courseId" defaultValue={section.courseId}>{courses.map((course) => <option key={course.id} value={course.id}>{course.code} - {course.title}</option>)}</select></Field>
               <Field label="Teacher"><select name="teacherId" defaultValue={section.teacherId}>{teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.firstName} {teacher.lastName}</option>)}</select></Field>
+              {/* One field where there were two. The free-text "Term" input
+                  next to this select is what let a section read "Spring 2027"
+                  while pointing at Fall 2026; only Planned and Active terms are
+                  offered, because scheduling a section into a closed term is
+                  not a thing anyone means to do. */}
               <Field label="Academic term">
-                <select name="academicTermId" defaultValue={section.academicTermId ?? ""}>
-                  <option value="">None</option>
+                <select name="academicTermId" defaultValue={section.academicTermId} required>
                   {terms.map((term) => <option key={term.id} value={term.id}>{term.name}</option>)}
                 </select>
               </Field>
-              <Field label="Term"><input name="term" defaultValue={section.term} required /></Field>
               <Field label="Room"><input name="room" defaultValue={section.room} required /></Field>
               <Field label="Days"><input name="days" defaultValue={(schedule.days ?? []).join(", ")} required /></Field>
               <Field label="Start"><input name="start" defaultValue={schedule.start ?? ""} required /></Field>
@@ -132,7 +135,7 @@ export default async function SectionDetailPage({ params }: { params: Promise<{ 
             <CardHeader title="Daily Attendance Entry" />
             <ActionForm action={recordAttendance} className="stack">
               <input type="hidden" name="classSectionId" value={section.id} />
-              <input type="hidden" name="academicTermId" value={section.academicTermId ?? ""} />
+              <input type="hidden" name="academicTermId" value={section.academicTermId} />
               <input type="hidden" name="recordedByTeacherId" value={section.teacherId} />
               <Field label="Student"><select name="studentId">{enrolled.map((enrollment) => <option key={enrollment.studentId} value={enrollment.studentId}>{enrollment.student.firstName} {enrollment.student.lastName}</option>)}</select></Field>
               <Field label="Date"><input name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field>

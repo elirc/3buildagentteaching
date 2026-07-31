@@ -67,8 +67,10 @@ export const courseSchema = z.object({
 export const classSectionSchema = z.object({
   courseId: z.string().min(1),
   teacherId: z.string().min(1),
-  academicTermId: z.string().optional().nullable(),
-  term: z.string().min(1),
+  // Required, and the free-text `term` that used to sit beside it is gone. The
+  // form now offers a select of real terms, so there is no longer a way to type
+  // a label that disagrees with the row it points at.
+  academicTermId: z.string().min(1, { message: "Choose the academic term this section runs in." }),
   room: z.string().min(1),
   schedule: z.record(z.unknown()),
   capacity: z.number().int().min(1),
