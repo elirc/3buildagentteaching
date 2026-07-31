@@ -259,9 +259,9 @@ export const agentRunService = withServiceLogging("agent-run-service", {
     });
   },
 
-  async runAtRiskAgent(actor: ActorContext, studentId: string) {
+  async runAtRiskAgent(actor: ActorContext, studentId: string, now: Date = new Date()) {
     assertCan(actor, "agent:run", { studentId });
-    const agentInput = await buildAtRiskInput(studentId);
+    const agentInput = await buildAtRiskInput(studentId, now);
     return persistAgentRun<AtRiskInput, AtRiskOutput>({
       actor,
       agentType: "AtRiskStudentDetection",
@@ -403,7 +403,7 @@ export const agentRunService = withServiceLogging("agent-run-service", {
    * behaviour an advisor needs: "the review failed because the attendance agent
    * did" is actionable, and the two runs that did work are still worth reading.
    */
-  async runStudentSuccessReviewAgent(actor: ActorContext, studentId: string) {
+  async runStudentSuccessReviewAgent(actor: ActorContext, studentId: string, now: Date = new Date()) {
     assertCan(actor, "agent:run", { studentId });
 
     // One fetch for the whole tree. Previously each buildXxxInput helper issued
@@ -440,8 +440,8 @@ export const agentRunService = withServiceLogging("agent-run-service", {
         targetType: "Student",
         targetId: studentId,
         parentRunId: parent.id,
-        inputSnapshot: buildAtRiskInputFrom(student),
-        execute: () => executeAgent<AtRiskInput, AtRiskOutput>("AtRiskStudentDetection", buildAtRiskInputFrom(student))
+        inputSnapshot: buildAtRiskInputFrom(student, now),
+        execute: () => executeAgent<AtRiskInput, AtRiskOutput>("AtRiskStudentDetection", buildAtRiskInputFrom(student, now))
       });
 
       const attendance = await persistAgentRun<AttendanceAnomalyInput, AttendanceAnomalyOutput>({
@@ -456,6 +456,7 @@ export const agentRunService = withServiceLogging("agent-run-service", {
             "AttendanceAnomaly",
             buildAttendanceAnomalyInputFrom(student)
           )
+
       });
 
       const agentInput: StudentSuccessReviewInput = {
@@ -466,7 +467,10 @@ export const agentRunService = withServiceLogging("agent-run-service", {
         activeInterventions: student.interventionPlans
           .filter((plan) => plan.status === "Active")
           .map((plan) => ({ riskArea: plan.riskArea, summary: plan.summary, followUpDate: plan.followUpDate })),
-        guardianDigestOptIn: student.guardians.some((link) => link.receivesDigest)
+        guardianDigestOptIn: student.guardians.some((link) => link.receivesDigest),
+        // The same clock the children used, so a review and its sub-runs never
+        // disagree about what "next week" means.
+        now
       };
 
       const result = executeAgent<StudentSuccessReviewInput, StudentSuccessReviewOutput>(
@@ -567,12 +571,19 @@ function buildStudentProgressInputFrom(student: StudentAggregate, role: string):
   };
 }
 
-async function buildAtRiskInput(studentId: string): Promise<AtRiskInput> {
-  return buildAtRiskInputFrom(await loadStudentAggregate(studentId));
+async function buildAtRiskInput(studentId: string, now: Date): Promise<AtRiskInput> {
+  return buildAtRiskInputFrom(await loadStudentAggregate(studentId), now);
 }
 
-function buildAtRiskInputFrom(student: StudentAggregate): AtRiskInput {
+function buildAtRiskInputFrom(student: StudentAggregate, now: Date): AtRiskInput {
   return {
+    /*
+     * One clock per run, passed in rather than read here. Agents are pure
+     * functions of their input, and a `new Date()` inside one makes its output
+     * change with the calendar — which is exactly what made a golden-fixture
+     * harness impossible before US-19.
+     */
+    now,
     studentName: `${student.firstName} ${student.lastName}`,
     gradeSummary: calculateGradeSummary(
       student.submissions.map((submission) => ({
@@ -781,31 +792,11 @@ async function buildGradingConsistencyInput(assignmentId: string): Promise<Gradi
   };
 }
 
-async function buildStudentSuccessReviewInput(studentId: string, role: string): Promise<StudentSuccessReviewInput> {
-  const [progressInput, riskInput, attendanceInput, student] = await Promise.all([
-    buildStudentProgressInput(studentId, role),
-    buildAtRiskInput(studentId),
-    buildAttendanceAnomalyInput("Student", studentId),
-    prisma.student.findUniqueOrThrow({
-      where: { id: studentId },
-      include: {
-        interventionPlans: true,
-        guardians: true
-      }
-    })
-  ]);
-  const progress = executeAgent<StudentProgressInput, StudentProgressOutput>("StudentProgressSummary", progressInput).output;
-  const risk = executeAgent<AtRiskInput, AtRiskOutput>("AtRiskStudentDetection", riskInput).output;
-  const attendance = executeAgent<AttendanceAnomalyInput, AttendanceAnomalyOutput>("AttendanceAnomaly", attendanceInput).output;
-
-  return {
-    studentName: `${student.firstName} ${student.lastName}`,
-    progress,
-    risk,
-    attendance,
-    activeInterventions: student.interventionPlans
-      .filter((plan) => plan.status === "Active")
-      .map((plan) => ({ riskArea: plan.riskArea, summary: plan.summary, followUpDate: plan.followUpDate })),
-    guardianDigestOptIn: student.guardians.some((guardian) => guardian.receivesDigest)
-  };
-}
+/*
+ * buildStudentSuccessReviewInput used to live here. US-18 inlined it into
+ * runStudentSuccessReviewAgent so the sub-agents could be persisted as child
+ * runs, and left this behind — dead, but still compiling, still typechecking,
+ * and still calling executeAgent inline in a way the story had just removed.
+ * Deleted rather than updated for the clock: the fastest way to keep a
+ * superseded code path from being resurrected is to not have one.
+ */

@@ -78,6 +78,16 @@ export interface AtRiskInput {
   attendanceSummary: AttendanceSummary;
   interventionHistory: Array<{ status: string; riskArea: string; summary: string }>;
   recentSupportNotes: Array<{ noteType: string; content: string }>;
+  /**
+   * The clock, supplied by the caller.
+   *
+   * Required rather than optional: an optional `now` defaulting to the wall
+   * clock inside the agent would look like determinism while providing none,
+   * and the caller who forgot it would never find out. `persistAgentRun` passes
+   * one `new Date()` per run so a run is internally consistent; fixtures pass a
+   * fixed date so their expected output never expires.
+   */
+  now: Date;
 }
 
 export interface AtRiskOutput {
@@ -232,6 +242,8 @@ export interface StudentSuccessReviewInput {
   attendance: AttendanceAnomalyOutput;
   activeInterventions: Array<{ riskArea: string; summary: string; followUpDate?: Date }>;
   guardianDigestOptIn: boolean;
+  /** See AtRiskInput.now — same reasoning, same requirement. */
+  now: Date;
 }
 
 export interface StudentSuccessReviewOutput {
