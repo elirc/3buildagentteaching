@@ -162,6 +162,7 @@ enum AgentType {
   GuardianCommunicationDraft
   GradingConsistency
   StudentSuccessReview
+  TermPostmortem
 }
 
 enum AgentRunStatus {
@@ -179,6 +180,7 @@ enum AgentTargetType {
   Submission
   LogGroup
   Job
+  AcademicTerm
 }
 
 enum GuardianRelationship {
