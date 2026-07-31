@@ -11,7 +11,7 @@ import { logService } from "../services/log-service";
 import { workerService } from "../services/worker-service";
 import { AppError } from "../errors";
 import { flushLogs } from "../logging";
-import { ADMIN, VIEWER, makeAssignment, makeRubric, makeSection, makeStudent, makeTeacher } from "./fixtures";
+import { ADMIN, VIEWER, makeAssignment, makeRubric, makeSection, makeStudent, makeTeacher, makeTerm } from "./fixtures";
 
 /**
  * These cover the rules that only exist once a database is involved: unique
@@ -552,8 +552,7 @@ describe("academicService.updateSection capacity guard", () => {
       academicService.updateSection(ADMIN, section.id, {
         courseId: section.courseId,
         teacherId: teacher.id,
-        academicTermId: null,
-        term: section.term,
+        academicTermId: section.academicTermId,
         room: section.room,
         schedule: { days: ["Mon"], start: "09:00", end: "09:55" },
         capacity: 1,
@@ -699,6 +698,70 @@ describe("workerService with real handlers", () => {
     const released = await workerService.releaseDueJobs(ADMIN);
     expect(released).toBe(1);
     expect((await workerService.runNextJob(ADMIN))?.id).toBe("job_scheduled");
+  });
+});
+
+describe("assignment dates are bound to the section's term", () => {
+  it("refuses a due date outside the term and names it", async () => {
+    const teacher = await makeTeacher();
+    const term = await makeTerm({
+      id: "term_narrow",
+      name: "Fall 2026",
+      startsAt: new Date("2026-08-17T00:00:00.000Z"),
+      endsAt: new Date("2026-12-18T00:00:00.000Z")
+    });
+    const section = await makeSection(teacher.id, { academicTermId: term.id });
+
+    await expect(
+      assignmentService.createAssignment(ADMIN, {
+        classSectionId: section.id,
+        title: "Winter break homework",
+        description: "Due after the term ends.",
+        type: "Homework",
+        status: "Draft",
+        dueDate: new Date("2027-01-10T00:00:00.000Z"),
+        pointsPossible: 10,
+        createdByTeacherId: teacher.id
+      })
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+
+    // Refused means nothing written, not "written and flagged".
+    expect(await prisma.assignment.count({ where: { classSectionId: section.id } })).toBe(0);
+  });
+
+  it("refuses a grading period from a different term", async () => {
+    const teacher = await makeTeacher();
+    const sectionTerm = await makeTerm({ id: "term_a", name: "Term A" });
+    const otherTerm = await makeTerm({
+      id: "term_b",
+      name: "Term B",
+      startsAt: new Date("2031-01-01T00:00:00.000Z"),
+      endsAt: new Date("2031-06-30T00:00:00.000Z")
+    });
+    const section = await makeSection(teacher.id, { academicTermId: sectionTerm.id });
+    const foreignPeriod = await prisma.gradingPeriod.create({
+      data: {
+        academicTermId: otherTerm.id,
+        name: "B-Q1",
+        startsAt: otherTerm.startsAt,
+        endsAt: otherTerm.endsAt,
+        weight: 1
+      }
+    });
+
+    await expect(
+      assignmentService.createAssignment(ADMIN, {
+        classSectionId: section.id,
+        gradingPeriodId: foreignPeriod.id,
+        title: "Cross-term assignment",
+        description: "Points at a period in another term.",
+        type: "Homework",
+        status: "Draft",
+        dueDate: new Date("2026-03-01T00:00:00.000Z"),
+        pointsPossible: 10,
+        createdByTeacherId: teacher.id
+      })
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
 });
 
