@@ -43,7 +43,8 @@ export type AgentType =
   | "FailedJobInvestigation"
   | "GuardianCommunicationDraft"
   | "GradingConsistency"
-  | "StudentSuccessReview";
+  | "StudentSuccessReview"
+  | "TermPostmortem";
 export type AgentRunStatus = "Pending" | "Running" | "Succeeded" | "Failed";
 export type AgentTargetType =
   | "Student"
@@ -52,7 +53,8 @@ export type AgentTargetType =
   | "Assignment"
   | "Submission"
   | "LogGroup"
-  | "Job";
+  | "Job"
+  | "AcademicTerm";
 
 export type GuardianRelationship = "Mother" | "Father" | "Guardian" | "Grandparent" | "Other";
 export type NotificationChannel = "InApp" | "Email" | "Digest";

@@ -1,0 +1,34 @@
+{
+  "name": "backlog-and-unresolved-plans",
+  "input": {
+    "termName": "Fall 2026",
+    "termStatus": "Active",
+    "analysis": {
+      "sectionHighlights": [
+        { "sectionId": "section_algebra_a", "headline": "MATH-101: class average 64%", "average": 64 },
+        { "sectionId": "section_biology_a", "headline": "SCI-110: class average 82%", "average": 82 }
+      ],
+      "sectionsNeedingReview": [
+        { "sectionId": "section_algebra_a", "reason": "class average 64% is at or below 70%; 4 submission(s) still ungraded" }
+      ],
+      "interventionEffectiveness": { "completed": 1, "abandoned": 1, "stillActive": 2 },
+      "staffingObservations": ["Nina Patel finished the term at workload score 74."],
+      "dataQualityIssues": ["4 submission(s) are ungraded at term end."],
+      "recommendationAcceptanceRate": 0.5,
+      "totalUngraded": 4,
+      "riskCounts": { "Low": 20, "Medium": 8, "High": 3, "Critical": 1 }
+    },
+    "now": "2026-10-13T00:00:00.000Z"
+  },
+  "expected": {
+    "nextTermReadiness": "Blocked",
+    "why": "Ungraded work blocks rather than merely flags: a term whose grades are not final cannot be closed honestly, so the readiness must say Blocked and not NeedsWork."
+  },
+  "assertions": [
+    { "path": "nextTermReadiness", "op": "equals", "value": "Blocked" },
+    { "path": "sectionsNeedingReview[0].sectionId", "op": "equals", "value": "section_algebra_a" },
+    { "path": "dataQualityIssues", "op": "arrayIncludes", "value": "4 submission(s) are ungraded at term end." },
+    { "path": "recommendationsForNextTerm[0]", "op": "contains", "value": "ungraded" },
+    { "path": "interventionEffectiveness.narrative", "op": "contains", "value": "still active" }
+  ]
+}

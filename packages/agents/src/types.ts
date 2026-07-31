@@ -6,7 +6,7 @@ import type {
   JobStatus,
   RiskLevel
 } from "@agentic-edu/shared";
-import type { AttendanceRecordLike, AttendanceSummary, GradeSummary, ScoreRecord } from "@agentic-edu/domain";
+import type { AttendanceRecordLike, AttendanceSummary, GradeSummary, ScoreRecord, TermAnalysis } from "@agentic-edu/domain";
 
 export interface AgentFinding {
   severity: "info" | "warning" | "critical";
@@ -209,6 +209,25 @@ export interface GuardianCommunicationDraftOutput {
   requiredHumanReview: boolean;
   sensitiveContentWarnings: string[];
   suggestedSendWindow: string;
+}
+
+export interface TermPostmortemInput {
+  termName: string;
+  termStatus: string;
+  analysis: TermAnalysis;
+  /** See AtRiskInput.now — required for the same reason. */
+  now: Date;
+}
+
+export interface TermPostmortemOutput {
+  executiveSummary: string;
+  sectionHighlights: Array<{ sectionId: string; headline: string; average: number | null }>;
+  sectionsNeedingReview: Array<{ sectionId: string; reason: string }>;
+  interventionEffectiveness: { completed: number; abandoned: number; narrative: string };
+  staffingObservations: string[];
+  dataQualityIssues: string[];
+  recommendationsForNextTerm: string[];
+  nextTermReadiness: "Ready" | "NeedsWork" | "Blocked";
 }
 
 export interface GradingConsistencyInput {

@@ -8,6 +8,7 @@ import { guardianCommunicationDraftAgent } from "./guardian-communication-agent"
 import { studentProgressSummaryAgent } from "./student-progress-agent";
 import { studentSuccessReviewAgent } from "./student-success-review-agent";
 import { teacherWorkloadInsightAgent } from "./teacher-workload-agent";
+import { termPostmortemAgent } from "./term-postmortem-agent";
 import type { AgentType } from "@agentic-edu/shared";
 
 export const agentRegistry = {
@@ -19,7 +20,8 @@ export const agentRegistry = {
   FailedJobInvestigation: failedJobInvestigationAgent,
   GuardianCommunicationDraft: guardianCommunicationDraftAgent,
   GradingConsistency: gradingConsistencyAgent,
-  StudentSuccessReview: studentSuccessReviewAgent
+  StudentSuccessReview: studentSuccessReviewAgent,
+  TermPostmortem: termPostmortemAgent
 } satisfies Record<AgentType, AgentDefinition<unknown, unknown>>;
 
 export function listAgents(): AgentDefinition<unknown, unknown>[] {

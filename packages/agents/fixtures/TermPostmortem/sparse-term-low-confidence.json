@@ -1,0 +1,26 @@
+{
+  "name": "sparse-term-low-confidence",
+  "input": {
+    "termName": "Summer 2027",
+    "termStatus": "Active",
+    "analysis": {
+      "sectionHighlights": [{ "sectionId": "s1", "headline": "ART-100: no graded work to summarise.", "average": null }],
+      "sectionsNeedingReview": [],
+      "interventionEffectiveness": { "completed": 0, "abandoned": 0, "stillActive": 0 },
+      "staffingObservations": [],
+      "dataQualityIssues": [],
+      "recommendationAcceptanceRate": null,
+      "totalUngraded": 0,
+      "riskCounts": { "Low": 2, "Medium": 0, "High": 0, "Critical": 0 }
+    },
+    "now": "2026-10-13T00:00:00.000Z"
+  },
+  "expected": {
+    "why": "One section, no grades, no interventions, no recommendations. The agent must not sound confident about a term it has almost nothing on — US-20 requires confidence below 60 here."
+  },
+  "assertions": [
+    { "path": "executiveSummary", "op": "contains", "value": "too little activity" },
+    { "path": "nextTermReadiness", "op": "equals", "value": "Ready" },
+    { "path": "recommendationsForNextTerm[0]", "op": "contains", "value": "No structural changes" }
+  ]
+}

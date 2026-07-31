@@ -60,7 +60,7 @@ export default async function TermsPage() {
           return (
             <Card key={term.id}>
               <CardHeader
-                title={term.name}
+                title={<a href={`/terms/${term.id}`}>{term.name}</a>}
                 eyebrow={`${formatDate(term.startsAt)} to ${formatDate(term.endsAt)}`}
                 actions={<StatusBadge value={term.status} />}
               >

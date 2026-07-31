@@ -5,8 +5,11 @@ import {
   calculateGradeSummary,
   calculateNextRetryAt,
   calculateRubricScore,
+  analyseTerm,
+  assessTermReadiness,
   calculateWeightedGradeSummary,
   buildWeeklyRiskReport,
+  decideTermClosure,
   canAcquireJobLock,
   compareSemver,
   diffReports,
@@ -638,6 +641,120 @@ describe("role permissions", () => {
     expect(canPerform({ id: "u", role: "SchoolManager" }, "log:manage")).toBe(false);
     expect(canPerform({ id: "u", role: "Advisor" }, "log:manage")).toBe(false);
     expect(canPerform({ id: "u", role: "Teacher" }, "log:manage")).toBe(false);
+  });
+});
+
+describe("term analysis", () => {
+  const section = (overrides: Partial<Parameters<typeof analyseTerm>[0]["sections"][number]> = {}) => ({
+    sectionId: "s1",
+    sectionLabel: "MATH-101",
+    teacherName: "Nina Patel",
+    enrolledCount: 20,
+    classAverage: 85,
+    submittedCount: 40,
+    missingCount: 0,
+    ungradedCount: 0,
+    attendanceConcernCount: 0,
+    ...overrides
+  });
+
+  const analyse = (overrides: Partial<Parameters<typeof analyseTerm>[0]> = {}) =>
+    analyseTerm({
+      termName: "Fall 2026",
+      sections: [section()],
+      interventions: [],
+      teacherWorkloads: [],
+      agentRunCount: 0,
+      recommendationsProposed: 0,
+      recommendationsAccepted: 0,
+      deadLetteredJobCount: 0,
+      studentRiskLevels: [],
+      ...overrides
+    });
+
+  it("accumulates every reason a section needs review, not just the first", () => {
+    // A section can be low-scoring AND behind on grading AND have attendance
+    // concerns. Reporting only the first would send someone to fix a third of
+    // the problem and call it done.
+    const result = analyse({
+      sections: [section({ classAverage: 61, missingCount: 20, ungradedCount: 5, attendanceConcernCount: 2 })]
+    });
+
+    const reason = result.sectionsNeedingReview[0]?.reason ?? "";
+    expect(reason).toContain("61%");
+    expect(reason).toContain("missing");
+    expect(reason).toContain("ungraded");
+    expect(reason).toContain("attendance");
+  });
+
+  it("counts cancelled as abandoned and still-active separately", () => {
+    /*
+     * A plan still running at term end has not been abandoned — it has not
+     * finished, which is a different problem with a different owner. Folding
+     * them together would report a school that carries plans forward as one
+     * that gives up on them.
+     */
+    const result = analyse({
+      interventions: [
+        { status: "Completed", riskArea: "Grades" },
+        { status: "Cancelled", riskArea: "Attendance" },
+        { status: "Active", riskArea: "Grades" },
+        { status: "Active", riskArea: "Engagement" }
+      ]
+    });
+
+    expect(result.interventionEffectiveness).toEqual({ completed: 1, abandoned: 1, stillActive: 2 });
+  });
+
+  it("flags a section with enrolled students and no submissions at all", () => {
+    const result = analyse({ sections: [section({ submittedCount: 0, missingCount: 0, classAverage: null })] });
+    expect(result.dataQualityIssues.join(" ")).toContain("no submissions at all");
+  });
+
+  it("reports no acceptance rate rather than zero when nothing was recommended", () => {
+    // 0% means "everything was rejected". null means "nothing was proposed".
+    expect(analyse({ recommendationsProposed: 0 }).recommendationAcceptanceRate).toBeNull();
+    expect(analyse({ recommendationsProposed: 4, recommendationsAccepted: 1 }).recommendationAcceptanceRate).toBe(0.25);
+  });
+});
+
+describe("term readiness and closure", () => {
+  const baseAnalysis = {
+    sectionHighlights: [],
+    sectionsNeedingReview: [],
+    interventionEffectiveness: { completed: 0, abandoned: 0, stillActive: 0 },
+    staffingObservations: [],
+    dataQualityIssues: [],
+    recommendationAcceptanceRate: null,
+    totalUngraded: 0,
+    riskCounts: { Low: 0, Medium: 0, High: 0, Critical: 0 }
+  };
+
+  it("blocks only on ungraded work, and flags everything else as NeedsWork", () => {
+    /*
+     * The distinction the whole close-term workflow rests on. Ungraded work
+     * means grades are not final, and a term closed with non-final grades
+     * records a mark nobody scored. Everything else is worth doing and not
+     * worth blocking on.
+     */
+    expect(assessTermReadiness({ ...baseAnalysis, totalUngraded: 3 })).toBe("Blocked");
+    expect(assessTermReadiness({ ...baseAnalysis, staffingObservations: ["Heavy load"] })).toBe("NeedsWork");
+    expect(assessTermReadiness({ ...baseAnalysis, sectionsNeedingReview: [{ sectionId: "s1", reason: "low" }] })).toBe("NeedsWork");
+    expect(assessTermReadiness(baseAnalysis)).toBe("Ready");
+  });
+
+  it("refuses closure while work is ungraded, naming how much", () => {
+    const refused = decideTermClosure({ ungradedCount: 4, status: "Active" });
+    expect(refused.allowed).toBe(false);
+    expect(refused.reason).toContain("4 submission(s)");
+  });
+
+  it("refuses to close a term twice", () => {
+    // Idempotence would be wrong here: closing runs the postmortem agent, and a
+    // second close would produce a second report of a term that has not changed.
+    expect(decideTermClosure({ ungradedCount: 0, status: "Closed" }).allowed).toBe(false);
+    expect(decideTermClosure({ ungradedCount: 0, status: "Archived" }).allowed).toBe(false);
+    expect(decideTermClosure({ ungradedCount: 0, status: "Active" }).allowed).toBe(true);
   });
 });
 
