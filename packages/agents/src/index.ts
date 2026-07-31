@@ -10,4 +10,5 @@ export * from "./registry";
 export * from "./student-progress-agent";
 export * from "./student-success-review-agent";
 export * from "./teacher-workload-agent";
+export * from "./term-postmortem-agent";
 export * from "./types";

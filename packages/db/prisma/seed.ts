@@ -493,6 +493,21 @@ async function main() {
   await prisma.agentManifest.createMany({
     data: [
       {
+        id: "manifest_term_postmortem_v1",
+        agentType: "TermPostmortem",
+        version: "1.0.0",
+        name: "Term Postmortem Agent",
+        description: "Reviews a completed term and recommends what to change before the next one starts.",
+        // The only agent targeting an AcademicTerm. Pointing it at a Student is
+        // refused by the manifest gate rather than producing a confident report
+        // about the wrong kind of thing.
+        supportedTargets: ["AcademicTerm"],
+        requiredPermissions: ["agent:run", "term:manage"],
+        inputSchema: { version: "1.0.0", required: ["termName", "analysis"] },
+        outputSchema: { version: "1.0.0", required: ["executiveSummary", "nextTermReadiness"] },
+        isActive: true
+      },
+      {
         id: "manifest_attendance_anomaly_v1",
         agentType: "AttendanceAnomaly",
         version: "1.0.0",

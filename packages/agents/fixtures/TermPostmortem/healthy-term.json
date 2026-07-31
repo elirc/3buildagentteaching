@@ -1,0 +1,27 @@
+{
+  "name": "healthy-term",
+  "input": {
+    "termName": "Spring 2027",
+    "termStatus": "Active",
+    "analysis": {
+      "sectionHighlights": [
+        { "sectionId": "s1", "headline": "MATH-101: class average 88%", "average": 88 },
+        { "sectionId": "s2", "headline": "SCI-110: class average 91%", "average": 91 }
+      ],
+      "sectionsNeedingReview": [],
+      "interventionEffectiveness": { "completed": 3, "abandoned": 0, "stillActive": 0 },
+      "staffingObservations": [],
+      "dataQualityIssues": [],
+      "recommendationAcceptanceRate": 0.8,
+      "totalUngraded": 0,
+      "riskCounts": { "Low": 40, "Medium": 6, "High": 1, "Critical": 0 }
+    },
+    "now": "2026-10-13T00:00:00.000Z"
+  },
+  "expected": { "nextTermReadiness": "Ready" },
+  "assertions": [
+    { "path": "nextTermReadiness", "op": "equals", "value": "Ready" },
+    { "path": "sectionsNeedingReview", "op": "length", "value": 0 },
+    { "path": "interventionEffectiveness.completed", "op": "equals", "value": 3 }
+  ]
+}
