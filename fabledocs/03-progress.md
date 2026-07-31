@@ -20,35 +20,78 @@ actually stands. Updated when a story merges.
 | US-09 | [#15](https://github.com/elirc/3buildagentteaching/pull/15) | `/my-courses` student portal; `canSubmitAssignment` and `determineSubmissionStatus` finally enforced |
 | — | [#16](https://github.com/elirc/3buildagentteaching/pull/16) | Staff record pages refused to students and guardians |
 | US-10 | [#19](https://github.com/elirc/3buildagentteaching/pull/19) | Waitlist promotion with write-time capacity re-check, bulk enrolment with per-student outcomes, capacity-reduction guard |
+| US-11 | [#22](https://github.com/elirc/3buildagentteaching/pull/22) | Typed job handler registry, `jobService.enqueue` with idempotency, real producers, one lock instead of two |
+| US-12 | [#23](https://github.com/elirc/3buildagentteaching/pull/23) | Per-user notification inbox, event-driven notifications through the queue, `Critical` → Admin owner routing |
+| US-13 | [#24](https://github.com/elirc/3buildagentteaching/pull/24) | `createLogger` with an injected sink, all 13 services logging, `requestId` correlation, admin-only log retention |
+| US-14 | [#25](https://github.com/elirc/3buildagentteaching/pull/25) | `Student.guardianName`/`guardianEmail` dropped, guardian panel on the student page, idempotent backfill, fallback removed from the draft agent |
+| US-15 | [#26](https://github.com/elirc/3buildagentteaching/pull/26) | `ClassSection.academicTermId` required and `term` dropped, due dates validated against the term, weighted grading periods |
+| US-16 | [#27](https://github.com/elirc/3buildagentteaching/pull/27) | `Report` snapshots with week-over-week deltas, `handleReportGeneration`, CSV export with formula-injection defusal |
+| US-17 | [#28](https://github.com/elirc/3buildagentteaching/pull/28) | Manifest gate before every agent run, semver version selection, nine seeded manifests, `/agent-ops` activate/deactivate |
+| US-18 | [#29](https://github.com/elirc/3buildagentteaching/pull/29) | `AgentRun.parentRunId`, sub-agents persisted as children, confidence capped by the weakest child, run tree UI |
+| US-19 | [#30](https://github.com/elirc/3buildagentteaching/pull/30) | Clock injection + determinism scan, 28 golden fixtures, `evaluateFixture`, `npm run agents:eval` gating CI |
+| US-20 | [#31](https://github.com/elirc/3buildagentteaching/pull/31) | `TermPostmortem` agent, term aggregation in the domain, close-term workflow refusing on ungraded work |
 
-**Test count: 28 → 103** (79 unit + 24 integration), plus a smoke pass over 28
-routes and 14 data assertions — 10 of them role-scoped. CI green on all three
-jobs for every merge.
+**All 20 stories are shipped.**
+
+**Test count: 28 → 160 unit + 59 integration**, plus 31 golden agent fixtures
+run by `npm run agents:eval`, plus a smoke pass over the route sweep. CI is
+green on all three jobs for every merge. (Those numbers are read off the last
+green CI run, not estimated — the integration count in particular is easy to
+get wrong by counting `it(` calls, which misses nothing and double-counts
+nothing only by luck.)
 
 ## Not started
 
-US-11 through US-20, exactly as written in `02-user-stories.md`. Nothing in
-those stories has been superseded — the file is still the spec.
+Nothing in the backlog. Two criteria shipped partial — see below.
 
 ## How to verify your work now
 
 CI runs on every PR and is the authority. Locally:
 
 ```bash
-npm run verify            # typecheck + 53 unit tests   (~30s warm)
-npm run test:db:up        # throwaway Postgres on :5443
-npm run test:integration  # 10 service tests            (~6 min here)
-npm run smoke             # boots the app, checks routes and data
+npm run verify                 # typecheck + 160 unit tests
+npm run agents:eval -- --dry   # 31 golden agent fixtures, no database needed
+npm run test:db:up             # throwaway Postgres on :5443
+npm run test:integration       # 59 service tests (~14s on CI, far longer here)
+npm run smoke                  # boots the app, checks routes and data
 ```
+
+`npm run agents:eval -- --dry` is the fastest useful gate added since US-04: it
+needs no database and catches an agent whose output has drifted.
 
 `npm run smoke` is slow on a loaded laptop — Next compiles each route on first
 request, and this box OOM-killed two attempts. It takes **19 seconds** on a CI
 runner. If it is struggling locally, push and let CI run it.
 
+**The same is now true of the integration suite.** On a memory-starved machine
+it took 706 seconds against a CI time of 14, and produced a Prisma transaction
+timeout in an unrelated test. If that happens, check free memory before
+debugging your code — and do not merge on "probably flaky" without checking.
+
 ## Known partials in shipped work
 
 These were called out in their PRs rather than ticked silently. If you pick one
 up, it is a small piece of work, not a rewrite.
+
+- **US-20 criterion 10** — the postmortem is not enqueueable as an `AgentRun`
+  job. The job payload schema and `dispatchAgent` both enumerate the seven agent
+  types they accept, and adding an eighth means answering a real question: what
+  should a queued postmortem do if the term is closed underneath it between
+  enqueue and run? `closeTerm` runs the agent synchronously *because* it needs
+  the result before committing the status change.
+- **US-20 criterion 7 (second half)** — closed terms do not yet reject new
+  assignments or attendance records. The status is set; nothing consults it on
+  write. `decideTermClosure` is the obvious place to grow a companion rule.
+- **US-16** — `/at-risk` and `/gradebook` export the *live* query rather than a
+  stored snapshot. That is correct for those pages and worth knowing: only
+  `/reports/[id]` exports something that will still say the same thing next week.
+- **US-17** — every agent run resolves its own manifest, so a success review does
+  four manifest queries. A request-scoped cache would fix it and is deliberately
+  not here: a cache that serves a manifest an operator has just deactivated
+  undoes the entire feature.
+- **US-18** — the three sub-agents run sequentially where the old inline code ran
+  them concurrently. They are independent; this is slower than it needs to be,
+  and was done for ordering clarity in the failure path.
 
 - **US-02 criterion 3** — mutating controls are gated on the operational pages
   (`/jobs/[id]` and the nine guarded routes), not across all 39 pages. The
@@ -92,6 +135,56 @@ up, it is a small piece of work, not a rewrite.
   fix is a persisted risk score maintained by a job — US-11 and US-16 territory.
 
 ## Things learned the hard way (worth not rediscovering)
+
+**A red test is usually a wrong test — this kept being true.** It happened three
+more times across US-13 to US-20, and every time the code was right: a CSV
+assertion that expected quoting where none was needed, a fixture asserting two
+teacher notes where the agent produces three, and a fixture claiming a
+three-day absence streak escalates to an advisor when the threshold sits at
+five. That last one became a *fourth* fixture pinning where the boundary
+actually is, because the fixture is now the documentation.
+
+**Prove a flaky-looking failure before calling it flaky.** One integration test
+blew Prisma's 5-second transaction timeout by 496 ms during US-16. Before
+dismissing it: the machine had 0.33 GB free of 15.8 GB, the suite took 706
+seconds against a usual ~140, the failing test was untouched by that PR, and CI
+ran the same suite green in 47 seconds. "It was flaky" and "it was probably
+flaky" are different claims and only one of them is checkable.
+
+**A superseded code path that still compiles will be resurrected.** US-18
+inlined `buildStudentSuccessReviewInput` and left the original behind: dead,
+typechecked, and still calling `executeAgent` inline in the way that story had
+just replaced. US-19 found it while threading a clock through. Delete rather
+than update.
+
+**Deriving a type from a runtime array beats declaring both.** `PermissionAction`
+became `(typeof PERMISSION_ACTIONS)[number]` in US-17 because a manifest stores
+permissions as `String[]` and something has to validate them. A union type has
+no runtime existence, so before that there was literally nothing to check
+against — and an unrecognised permission string would have silently meant "no
+permission required".
+
+**An optional injected clock is not injection.** US-19 made `now` a *required*
+parameter. A default of `new Date()` would have left every existing caller
+non-deterministic while looking fixed, and nobody would have found out. Making
+it required broke exactly two call sites, which is how we know there were two.
+
+**Postgres treats NULLs as distinct in a unique index.** US-16 wanted one report
+per scope per week and could not use `@@unique([type, scopeType, scopeId,
+periodStart])`, because `scopeId` is null for the whole-school report — the most
+common one. The constraint would have protected the section-scoped case and not
+the default one, which is worse than no constraint because it looks like
+protection.
+
+**`createMany` cannot resolve a relation to a row in its own batch.** Linking the
+seeded sub-runs to their parent in US-18 needed a separate `updateMany`; an
+inline `parentRunId` fails the foreign key.
+
+**JSON has no date type.** The first run of the US-19 fixture harness scored 0.00
+on every fixture because the agents receive `Date` objects and got strings, so
+`now.getTime()` threw. The table read "all your agents are broken". The reviver
+is four lines; the diagnosis was not.
+
 
 **A green test suite says nothing about whether the app starts.** During US-03
 verification every route returned 500 while `tsc -b` and 53 unit tests were
