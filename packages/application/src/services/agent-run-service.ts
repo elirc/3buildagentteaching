@@ -29,6 +29,7 @@ import {
 import type { AgentRunStatus, AgentTargetType, AgentType } from "@agentic-edu/shared";
 import { assertCan, type ActorContext } from "../context";
 import { createAuditEvent } from "../audit";
+import { AppError } from "../errors";
 import { jobService } from "./job-service";
 import type { JobPayload } from "../jobs/schemas";
 import { withServiceLogging } from "../logging";
@@ -519,13 +520,31 @@ async function buildGuardianCommunicationDraftInput(studentId: string): Promise<
     }))
   );
   const attendanceSummary = summarizeAttendance(student.attendanceRecords.map((record) => ({ status: record.status, date: record.date })));
-  const primaryGuardian = student.guardians[0]?.guardian;
+  /*
+   * No fallback. This used to read
+   *
+   *   guardianName: primaryGuardian ? ... : student.guardianName
+   *
+   * and that `:` was the bug US-14 exists to remove — it meant the address an
+   * agent drafted to depended on which of two stores happened to be populated,
+   * with no error and no warning when they disagreed. There is now one store,
+   * and a student with nothing in it is a data problem to report rather than to
+   * paper over: drafting to an unknown address is worse than failing.
+   */
+  const primaryGuardian = student.guardians.find((link) => link.isPrimary)?.guardian;
+  if (!primaryGuardian) {
+    throw new AppError(
+      "VALIDATION_ERROR",
+      `${student.firstName} ${student.lastName} has no guardian on record, so there is no one to draft to.`,
+      { studentId: student.id }
+    );
+  }
   const activeIntervention = student.interventionPlans.find((plan) => plan.status === "Active");
 
   return {
     studentName: `${student.firstName} ${student.lastName}`,
-    guardianName: primaryGuardian ? `${primaryGuardian.firstName} ${primaryGuardian.lastName}` : student.guardianName,
-    guardianEmail: primaryGuardian?.email ?? student.guardianEmail,
+    guardianName: `${primaryGuardian.firstName} ${primaryGuardian.lastName}`,
+    guardianEmail: primaryGuardian.email,
     communicationReason:
       attendanceSummary.absent >= 5
         ? "AttendanceConcern"
