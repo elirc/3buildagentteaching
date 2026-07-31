@@ -12,8 +12,9 @@ import { assertCan, type ActorContext } from "../context";
 import { createAuditEvent } from "../audit";
 import { jobService } from "./job-service";
 import { notifyService } from "./notify-service";
+import { withServiceLogging } from "../logging";
 
-export const assignmentService = {
+export const assignmentService = withServiceLogging("assignment-service", {
   async createAssignment(actor: ActorContext, input: AssignmentInput) {
     assertCan(actor, "assignment:create", { teacherId: input.createdByTeacherId });
     return prisma.$transaction(async (tx) => {
@@ -356,4 +357,4 @@ export const assignmentService = {
       return submission;
     });
   }
-};
+});

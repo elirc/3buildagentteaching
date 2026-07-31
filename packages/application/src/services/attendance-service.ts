@@ -5,8 +5,9 @@ import type { AttendanceStatus } from "@agentic-edu/shared";
 import { assertCan, type ActorContext } from "../context";
 import { createAuditEvent } from "../audit";
 import { AppError } from "../errors";
+import { withServiceLogging } from "../logging";
 
-export const attendanceService = {
+export const attendanceService = withServiceLogging("attendance-service", {
   /**
    * Records attendance for a whole section on one date, in one transaction.
    *
@@ -129,4 +130,4 @@ export const attendanceService = {
       return attendance;
     });
   }
-};
+});

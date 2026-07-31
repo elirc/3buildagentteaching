@@ -4,8 +4,10 @@ import { academicService } from "../services/academic-service";
 import { assignmentService } from "../services/assignment-service";
 import { enrollmentService } from "../services/enrollment-service";
 import { jobService } from "../services/job-service";
+import { logService } from "../services/log-service";
 import { workerService } from "../services/worker-service";
 import { AppError } from "../errors";
+import { flushLogs } from "../logging";
 import { ADMIN, VIEWER, makeAssignment, makeRubric, makeSection, makeStudent, makeTeacher } from "./fixtures";
 
 /**
@@ -694,5 +696,123 @@ describe("workerService with real handlers", () => {
     const released = await workerService.releaseDueJobs(ADMIN);
     expect(released).toBe(1);
     expect((await workerService.runNextJob(ADMIN))?.id).toBe("job_scheduled");
+  });
+});
+
+describe("structured logging", () => {
+  it("writes one warn row when a service refuses a caller, with the actor in metadata", async () => {
+    const teacher = await makeTeacher();
+    const section = await makeSection(teacher.id);
+    const student = await makeStudent();
+
+    await expect(
+      enrollmentService.enrollStudent(VIEWER, { studentId: student.id, classSectionId: section.id, allowWaitlist: false })
+    ).rejects.toBeInstanceOf(AppError);
+
+    // Log writes are fire-and-forget so that a failing log cannot fail a
+    // business operation. The consequence is that a test has to wait for them,
+    // and `flushLogs` is the honest way to do it — a sleep would pass on a fast
+    // machine and flake on a loaded one.
+    await flushLogs();
+
+    const rows = await prisma.structuredLog.findMany({
+      where: { service: "enrollment-service", level: "warn" }
+    });
+
+    expect(rows).toHaveLength(1);
+    const [row] = rows;
+    expect(row?.message).toBe("enrollment-service.enrollStudent refused");
+    expect(row?.metadata).toMatchObject({ code: "FORBIDDEN", actorId: VIEWER.id, role: "Viewer" });
+    /*
+     * The message must stay free of ids and names. fingerprintLog groups by
+     * normalised message text, so a message naming the student would give every
+     * student their own fingerprint and the grouping panel would stop grouping.
+     */
+    expect(row?.message).not.toContain(student.id);
+    expect(row?.message).not.toContain(VIEWER.id);
+  });
+
+  it("writes an info row naming the created entity when a service succeeds", async () => {
+    const teacher = await makeTeacher();
+    const section = await makeSection(teacher.id);
+    const student = await makeStudent();
+
+    const enrollment = await enrollmentService.enrollStudent(ADMIN, {
+      studentId: student.id,
+      classSectionId: section.id,
+      allowWaitlist: false
+    });
+    await flushLogs();
+
+    const row = await prisma.structuredLog.findFirst({
+      where: { service: "enrollment-service", level: "info", entityId: enrollment.id }
+    });
+
+    expect(row?.message).toBe("enrollment-service.enrollStudent succeeded");
+    expect(row?.userId).toBe(ADMIN.id);
+  });
+
+  it("groups two refusals of the same rule under one fingerprint", async () => {
+    const teacher = await makeTeacher();
+    const section = await makeSection(teacher.id);
+    const first = await makeStudent();
+    const second = await makeStudent();
+
+    await expect(
+      enrollmentService.enrollStudent(VIEWER, { studentId: first.id, classSectionId: section.id, allowWaitlist: false })
+    ).rejects.toBeInstanceOf(AppError);
+    await expect(
+      enrollmentService.enrollStudent(VIEWER, { studentId: second.id, classSectionId: section.id, allowWaitlist: false })
+    ).rejects.toBeInstanceOf(AppError);
+    await flushLogs();
+
+    const rows = await prisma.structuredLog.findMany({ where: { service: "enrollment-service", level: "warn" } });
+
+    // Different students, different requests, one operational problem. This is
+    // the whole reason messages are stable.
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((row) => row.fingerprint)).size).toBe(1);
+  });
+
+  it("purges logs older than the retention window and records the purge", async () => {
+    await prisma.structuredLog.createMany({
+      data: [
+        {
+          id: "log_old",
+          timestamp: new Date("2020-01-01T00:00:00.000Z"),
+          service: "test",
+          environment: "development",
+          level: "info",
+          message: "Ancient history",
+          metadata: {},
+          fingerprint: "abc123"
+        },
+        {
+          id: "log_recent",
+          timestamp: new Date(),
+          service: "test",
+          environment: "development",
+          level: "info",
+          message: "Still relevant",
+          metadata: {},
+          fingerprint: "def456"
+        }
+      ]
+    });
+
+    const result = await logService.purgeOlderThan(ADMIN, 30);
+
+    expect(result.removed).toBe(1);
+    expect(await prisma.structuredLog.findUnique({ where: { id: "log_old" } })).toBeNull();
+    expect(await prisma.structuredLog.findUnique({ where: { id: "log_recent" } })).not.toBeNull();
+
+    const audit = await prisma.auditEvent.findFirst({ where: { action: "log.purged" } });
+    expect(audit).not.toBeNull();
+    expect(audit?.after).toMatchObject({ removedCount: 1, retentionDays: 30 });
+  });
+
+  it("refuses a purge from anyone but an Admin, and refuses a zero-day window", async () => {
+    await expect(logService.purgeOlderThan(VIEWER, 30)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(logService.purgeOlderThan(ADMIN, 0)).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
 });

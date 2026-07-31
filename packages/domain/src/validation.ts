@@ -155,6 +155,23 @@ const recommendationDecisions = ["Approved", "Rejected", "Completed"] as const s
 export const approvalDecisionSchema = z.enum(approvalDecisions);
 export const recommendationDecisionSchema = z.enum(recommendationDecisions);
 
+/**
+ * Retention window for the /logs purge control.
+ *
+ * `z.coerce.number()` because a form field is always a string, and the
+ * `.int().positive()` pair is what stops the two inputs that actually get typed
+ * into this box from reaching the delete: an empty field (which coerces to 0,
+ * meaning "everything") and "7 days" (which coerces to NaN). The upper bound
+ * mirrors MAX_LOG_RETENTION_DAYS in ./log-retention.ts — the schema rejects the
+ * shape, the domain rule owns the policy, and the service checks the rule
+ * regardless of who called it.
+ */
+export const logRetentionDaysSchema = z.coerce
+  .number({ message: "Retention must be a number of days." })
+  .int({ message: "Retention must be a whole number of days." })
+  .min(1, { message: "Retention must be at least 1 day." })
+  .max(365, { message: "Retention cannot exceed 365 days." });
+
 export type InterventionStatusInput = z.infer<typeof interventionStatusSchema>;
 export type AcademicTermStatusInput = z.infer<typeof academicTermStatusSchema>;
 export type GuardianRelationshipInput = z.infer<typeof guardianRelationshipSchema>;

@@ -15,6 +15,7 @@ import type {
 import { createAuditEvent } from "../audit";
 import { assertCan, type ActorContext } from "../context";
 import { AppError } from "../errors";
+import { withServiceLogging } from "../logging";
 
 export interface AcademicTermCreateInput {
   name: string;
@@ -66,7 +67,7 @@ export interface NotificationCreateInput {
   metadata?: Prisma.InputJsonValue;
 }
 
-export const academicOperationsService = {
+export const academicOperationsService = withServiceLogging("academic-operations-service", {
   async createAcademicTerm(actor: ActorContext, input: AcademicTermCreateInput) {
     assertCan(actor, "term:manage");
     const decision = validateAcademicTerm(input);
@@ -316,4 +317,4 @@ export const academicOperationsService = {
       return approval;
     });
   }
-};
+});

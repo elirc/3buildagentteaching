@@ -2,8 +2,9 @@ import { prisma } from "@agentic-edu/db";
 import type { InterventionPlanInput, SupportNoteInput } from "@agentic-edu/domain";
 import { assertCan, type ActorContext } from "../context";
 import { createAuditEvent } from "../audit";
+import { withServiceLogging } from "../logging";
 
-export const supportService = {
+export const supportService = withServiceLogging("support-service", {
   async createSupportNote(actor: ActorContext, input: SupportNoteInput) {
     assertCan(actor, "supportNote:create", { studentId: input.studentId });
     return prisma.$transaction(async (tx) => {
@@ -50,4 +51,4 @@ export const supportService = {
       return plan;
     });
   }
-};
+});

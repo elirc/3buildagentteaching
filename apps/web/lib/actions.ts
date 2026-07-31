@@ -11,6 +11,7 @@ import {
   attendanceService,
   enrollmentService,
   jobService,
+  logService,
   studentService,
   supportService,
   teacherService,
@@ -27,6 +28,7 @@ import {
   guardianRelationshipSchema,
   interventionPlanSchema,
   interventionStatusSchema,
+  logRetentionDaysSchema,
   recommendationDecisionSchema,
   studentSchema,
   supportNoteSchema,
@@ -716,6 +718,23 @@ export async function runWorkerBatch(_previous: FormState, formData: FormData): 
     revalidatePath("/worker-jobs");
     revalidatePath("/jobs");
     return processed;
+  });
+}
+
+/**
+ * Retention control for /logs.
+ *
+ * `logRetentionDaysSchema` is doing real work: an empty number input arrives as
+ * `""`, `Number("")` is 0, and "delete logs older than 0 days" deletes the lot.
+ * Parsing before the service sees it turns that into a message on the form.
+ */
+export async function purgeStructuredLogs(_previous: FormState, formData: FormData): Promise<FormState> {
+  return runAction(async () => {
+    const actor = await getCurrentActor();
+    const days = logRetentionDaysSchema.parse(formData.get("days"));
+    const result = await logService.purgeOlderThan(actor, days);
+    revalidatePath("/logs");
+    return result;
   });
 }
 

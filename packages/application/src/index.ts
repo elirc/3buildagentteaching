@@ -1,5 +1,6 @@
 export * from "./context";
 export * from "./errors";
+export * from "./logging";
 export * from "./jobs/handlers";
 export * from "./jobs/schemas";
 export * from "./queries/academic-ops-query";
@@ -23,6 +24,7 @@ export * from "./services/assignment-service";
 export * from "./services/attendance-service";
 export * from "./services/enrollment-service";
 export * from "./services/job-service";
+export * from "./services/log-service";
 export * from "./services/notify-service";
 export * from "./services/student-service";
 export * from "./services/support-service";

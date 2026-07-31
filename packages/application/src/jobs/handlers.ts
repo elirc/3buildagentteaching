@@ -1,5 +1,6 @@
 import type { JobType } from "@agentic-edu/shared";
 import { canDeliverNotification } from "@agentic-edu/domain";
+import type { Logger } from "@agentic-edu/observability";
 import type { PrismaTransaction } from "../audit";
 import type { ActorContext } from "../context";
 import { AppError } from "../errors";
@@ -9,6 +10,8 @@ export interface JobHandlerContext {
   tx: PrismaTransaction;
   actor: ActorContext;
   jobId: string;
+  /** Already bound to the job runner and the acting user. */
+  log: Logger;
 }
 
 export type JobHandler = (payload: unknown, context: JobHandlerContext) => Promise<{ detail: string }>;
@@ -27,7 +30,7 @@ export type JobHandler = (payload: unknown, context: JobHandlerContext) => Promi
  * simulateJobFailure was imitating, except now it is real.
  */
 export const jobHandlers = {
-  EmailNotification: async (payload, { tx }) => {
+  EmailNotification: async (payload, { tx, log }) => {
     const input = jobPayloadSchemas.EmailNotification.parse(payload);
     const notification = await tx.notification.findUnique({ where: { id: input.notificationId } });
     if (!notification) {
@@ -42,6 +45,11 @@ export const jobHandlers = {
     if (!decision.deliverable) {
       // Not an error: already-delivered mail is a no-op, not a failure. Throwing
       // here would retry and dead-letter a job that has nothing wrong with it.
+      log.warn("Notification not deliverable", {
+        entityType: "Notification",
+        entityId: notification.id,
+        metadata: { channel: notification.channel, status: notification.status, reason: decision.reason }
+      });
       return { detail: decision.reason ?? "Nothing to deliver." };
     }
 
@@ -50,8 +58,17 @@ export const jobHandlers = {
      * fake. Marking Delivered is the honest simulation: it moves the state
      * machine that the rest of the app reads, and the absence of a transport is
      * visible in one place rather than pretended away in several.
+     *
+     * The log line is the delivery record. When a transport does arrive it
+     * replaces the line below and nothing else in the system has to change,
+     * because everything downstream already reads the notification's status.
      */
     await tx.notification.update({ where: { id: notification.id }, data: { status: "Delivered" } });
+    log.info("Notification delivered", {
+      entityType: "Notification",
+      entityId: notification.id,
+      metadata: { channel: notification.channel, type: notification.type, recipient: input.recipient }
+    });
     return { detail: `Marked notification ${notification.id} delivered to ${input.recipient}.` };
   },
 

@@ -11,6 +11,7 @@ import {
   canTransitionApproval,
   canReduceCapacity,
   decideEnrollment,
+  decideLogRetention,
   decideWaitlistPromotion,
   determineSubmissionStatus,
   findLongestAbsenceStreak,
@@ -594,5 +595,44 @@ describe("role permissions", () => {
   it("allows advisors to support assigned students only", () => {
     expect(canPerform({ id: "advisor", role: "Advisor", advisedStudentIds: ["student_1"] }, "intervention:create", { studentId: "student_1" })).toBe(true);
     expect(canPerform({ id: "advisor", role: "Advisor", advisedStudentIds: ["student_1"] }, "intervention:create", { studentId: "student_2" })).toBe(false);
+  });
+
+  it("keeps log deletion with Admin and away from every other role", () => {
+    // Deliberately asymmetric: SchoolManager has every other platform action.
+    // Deleting the record of what the system did is the one that stops there.
+    expect(canPerform({ id: "u", role: "Admin" }, "log:manage")).toBe(true);
+    expect(canPerform({ id: "u", role: "SchoolManager" }, "log:manage")).toBe(false);
+    expect(canPerform({ id: "u", role: "Advisor" }, "log:manage")).toBe(false);
+    expect(canPerform({ id: "u", role: "Teacher" }, "log:manage")).toBe(false);
+  });
+});
+
+describe("log retention", () => {
+  const now = new Date("2026-07-31T12:00:00.000Z");
+
+  it("refuses 0 days, which reads like a no-op and means delete everything", () => {
+    const decision = decideLogRetention(0, now);
+
+    expect(decision.valid).toBe(false);
+    expect(decision.reason).toContain("at least 1 day");
+    expect(decision.cutoff).toBeUndefined();
+  });
+
+  it("refuses fractional and non-finite windows", () => {
+    expect(decideLogRetention(1.5, now).valid).toBe(false);
+    expect(decideLogRetention(Number.NaN, now).valid).toBe(false);
+    expect(decideLogRetention(Number.POSITIVE_INFINITY, now).valid).toBe(false);
+  });
+
+  it("refuses more than a year", () => {
+    expect(decideLogRetention(366, now).valid).toBe(false);
+    expect(decideLogRetention(365, now).valid).toBe(true);
+  });
+
+  it("computes the cutoff by subtracting whole days from the supplied clock", () => {
+    const decision = decideLogRetention(30, now);
+
+    expect(decision.valid).toBe(true);
+    expect(decision.cutoff?.toISOString()).toBe("2026-07-01T12:00:00.000Z");
   });
 });
