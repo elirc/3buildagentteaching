@@ -1,8 +1,10 @@
 # Agentic Education Operations
 
-Agentic Education Operations is a TypeScript modular-monolith learning project that emulates the start of a realistic internal education operations and LMS platform.
+Agentic Education Operations is an internal education-operations and learning-management platform, built as a TypeScript modular monolith. School staff manage teachers, students, courses, sections, terms, enrollments, and guardians; teachers run assignments, rubrics, submissions, the gradebook, and attendance; advisors work an at-risk queue through interventions, approvals, and weekly reports. Deterministic local agents propose recommendations that a human approves or rejects, and every mutation lands in an audit trail.
 
-It includes teacher, student, course, section, term, guardian, enrollment, assignment, rubric, submission, gradebook, attendance, intervention, approval, notification, logs, jobs, audit, and deterministic mock-agent workflows. No Tailwind, no real LLM APIs, and no external API keys are used.
+Roles (Admin, School Manager, Teacher, Advisor, Student, Guardian, Viewer) each see a different application: navigation, permissions, and data scope all follow the acting user.
+
+It is original work, written from scratch — not a template or a tutorial follow-along. No Tailwind, no real LLM APIs, and no external API keys are used. The `docs/` and `fabledocs/` directories are written *about* this codebase after the fact, as a guided reading of a system that already exists.
 
 ## Stack
 
@@ -14,6 +16,15 @@ It includes teacher, student, course, section, term, guardian, enrollment, assig
 - Structured logging and audit helpers in `packages/observability`
 - CSS variables and reusable UI components in `packages/ui`
 - Shared enums and utilities in `packages/shared`
+
+## Prerequisites
+
+- Node.js 20 or newer (verified on 22.x)
+- Docker, for the PostgreSQL container
+
+Verified end to end from a clean clone: `npm install` → `db:generate` → `db:push`
+→ `db:seed` → `npm run build` and `npm test` all pass with no manual steps beyond
+the ones below.
 
 ## Setup
 

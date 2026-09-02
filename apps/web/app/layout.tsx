@@ -28,7 +28,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <aside className="app-sidebar">
             <a className="app-brand" href="/">
               <strong>Agentic Education Ops</strong>
-              <span>Modular monolith learning codebase</span>
+              <span>Education operations platform</span>
             </a>
             <nav className="app-nav" aria-label="Main navigation">
               {nav.map((item) => (

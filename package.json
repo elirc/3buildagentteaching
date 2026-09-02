@@ -2,7 +2,7 @@
   "name": "agentic-education-ops",
   "private": true,
   "version": "0.1.0",
-  "description": "Agentic Education Operations + Learning Management Platform learning codebase.",
+  "description": "Agentic Education Operations - an internal education operations and learning management platform.",
   "workspaces": [
     "apps/*",
     "packages/*"
