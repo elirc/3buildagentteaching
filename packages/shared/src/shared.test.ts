@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PAGE_SIZE,
+  JOB_STATUSES,
+  LOG_ENVIRONMENTS,
+  LOG_LEVELS,
   MAX_PAGE_SIZE,
   buildPagination,
   escapeCsvValue,
@@ -119,6 +122,44 @@ describe("parseEnumParam", () => {
     expect(parseEnumParam("DROP", statuses)).toBeUndefined();
     expect(parseEnumParam("", statuses)).toBeUndefined();
     expect(parseEnumParam(undefined, statuses)).toBeUndefined();
+  });
+});
+
+describe("enum value lists", () => {
+  // /logs and /jobs used to cast their query strings with `as never`, so
+  // ?level=Error and ?status=queued — the right words in the wrong case —
+  // reached Prisma as invalid enum members and returned a 500 instead of a
+  // page. These lists are what those routes now parse against.
+  it("matches the database spelling of each log level", () => {
+    expect(LOG_LEVELS).toEqual(["debug", "info", "warn", "error", "fatal"]);
+  });
+
+  it("matches the database spelling of each environment", () => {
+    expect(LOG_ENVIRONMENTS).toEqual(["development", "staging", "production"]);
+  });
+
+  it("matches the database spelling of each job status", () => {
+    expect(JOB_STATUSES).toEqual([
+      "Queued",
+      "Running",
+      "Succeeded",
+      "Failed",
+      "Retrying",
+      "DeadLettered"
+    ]);
+  });
+
+  it("rejects the wrong case rather than passing it to Prisma", () => {
+    expect(parseEnumParam("Error", LOG_LEVELS)).toBeUndefined();
+    expect(parseEnumParam("Warn", LOG_LEVELS)).toBeUndefined();
+    expect(parseEnumParam("queued", JOB_STATUSES)).toBeUndefined();
+    expect(parseEnumParam("BOGUS", LOG_ENVIRONMENTS)).toBeUndefined();
+  });
+
+  it("still accepts the exact spellings", () => {
+    expect(parseEnumParam("error", LOG_LEVELS)).toBe("error");
+    expect(parseEnumParam("production", LOG_ENVIRONMENTS)).toBe("production");
+    expect(parseEnumParam("Queued", JOB_STATUSES)).toBe("Queued");
   });
 });
 

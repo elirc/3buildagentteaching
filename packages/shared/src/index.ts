@@ -25,6 +25,18 @@ export type RiskLevel = "Low" | "Medium" | "High" | "Critical";
 export type PerformanceBand = "Excellent" | "Good" | "Warning" | "AtRisk" | "InsufficientData";
 export type LogLevel = "debug" | "info" | "warn" | "error" | "fatal";
 export type AppEnvironment = "development" | "staging" | "production";
+
+/**
+ * The runtime twins of the two types above.
+ *
+ * Both are Prisma enums, so an unrecognised value reaching a query is a thrown
+ * validation error rather than an empty result. Anything parsing user input
+ * into one of these â€” a query string, a form field â€” needs the values at
+ * runtime to check against, which a bare type cannot provide. The
+ * `satisfies readonly LogLevel[]` keeps each list honest if the type changes.
+ */
+export const LOG_LEVELS = ["debug", "info", "warn", "error", "fatal"] as const satisfies readonly LogLevel[];
+export const LOG_ENVIRONMENTS = ["development", "staging", "production"] as const satisfies readonly AppEnvironment[];
 export type JobType =
   | "EmailNotification"
   | "GradeRecalculation"
@@ -34,6 +46,14 @@ export type JobType =
   | "GuardianDigest"
   | "AgentRun";
 export type JobStatus = "Queued" | "Running" | "Succeeded" | "Failed" | "Retrying" | "DeadLettered";
+export const JOB_STATUSES = [
+  "Queued",
+  "Running",
+  "Succeeded",
+  "Failed",
+  "Retrying",
+  "DeadLettered"
+] as const satisfies readonly JobStatus[];
 export type AgentType =
   | "StudentProgressSummary"
   | "AtRiskStudentDetection"

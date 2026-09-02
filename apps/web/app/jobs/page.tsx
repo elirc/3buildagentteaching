@@ -1,5 +1,6 @@
 import { Card, CardHeader, DataTable, PageHeader } from "@agentic-edu/ui";
 import { prisma } from "@agentic-edu/db";
+import { JOB_STATUSES, parseEnumParam } from "@agentic-edu/shared";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime } from "@/lib/format";
 import { guardRoute } from "@/components/route-guard";
@@ -9,8 +10,12 @@ export default async function JobsPage({ searchParams }: { searchParams?: Promis
   if (denied) return denied;
 
   const params = (await searchParams) ?? {};
+  // `status` is a Prisma enum, so an unrecognised value â€” including a
+  // correctly-spelled one in the wrong case, like ?status=queued â€” throws
+  // rather than returning nothing. Parse it to "filter ignored" instead.
+  const status = parseEnumParam(params.status, JOB_STATUSES);
   const jobs = await prisma.backgroundJob.findMany({
-    where: { status: params.status ? (params.status as never) : undefined },
+    where: { status },
     orderBy: { createdAt: "desc" }
   });
   return (
