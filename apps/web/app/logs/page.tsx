@@ -1,6 +1,7 @@
 import { Card, CardHeader, DataTable, PageHeader } from "@agentic-edu/ui";
 import { prisma } from "@agentic-edu/db";
 import { scoreOperationalAnomaly } from "@agentic-edu/observability";
+import { LOG_ENVIRONMENTS, LOG_LEVELS, parseEnumParam } from "@agentic-edu/shared";
 import { StatusBadge } from "@/components/status-badge";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { formatDateTime } from "@/lib/format";
@@ -14,6 +15,13 @@ export default async function LogsPage({ searchParams }: { searchParams?: Promis
 
   const { can } = await getActorCapabilities();
   const params = (await searchParams) ?? {};
+  // `level` and `environment` are Prisma enums, so an unrecognised value is a
+  // validation error rather than an empty result set â€” a hand-typed or stale
+  // URL like ?level=Error used to crash the page with a 500. Parsing against
+  // the allowed set turns that into "filter ignored", which is what every other
+  // filter on this page already does with input it cannot use.
+  const level = parseEnumParam(params.level, LOG_LEVELS);
+  const environment = parseEnumParam(params.environment, LOG_ENVIRONMENTS);
   const timestamp =
     params.from || params.to
       ? {
@@ -24,10 +32,9 @@ export default async function LogsPage({ searchParams }: { searchParams?: Promis
   const [logs, groups] = await Promise.all([
     prisma.structuredLog.findMany({
       where: {
-        level: params.level ? (params.level as never) : undefined,
-        service: params.service ? { contains: params.service, mode: "insensitive" } : undefined
-        ,
-        environment: params.environment ? (params.environment as never) : undefined,
+        level,
+        service: params.service ? { contains: params.service, mode: "insensitive" } : undefined,
+        environment,
         entityType: params.entityType ? { contains: params.entityType, mode: "insensitive" } : undefined,
         userId: params.userId ? { contains: params.userId, mode: "insensitive" } : undefined,
         // Exact match, not `contains`. A request id is a whole identifier — a

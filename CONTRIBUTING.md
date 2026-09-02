@@ -1,9 +1,8 @@
 # Contributing
 
-This repo is a teaching codebase. The git history is part of the material — it is
-meant to be *read*, not just to exist. Everything below is the workflow every
-change follows, including the ones already merged. Open any merged PR and you
-should be able to reconstruct why each line changed.
+The git history here is meant to be *read*, not just to exist. Everything below
+is the workflow every change follows, including the ones already merged. Open any
+merged PR and you should be able to reconstruct why each line changed.
 
 ---
 
