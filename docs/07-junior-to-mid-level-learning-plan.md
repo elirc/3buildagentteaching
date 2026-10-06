@@ -1,5 +1,11 @@
 # Junior-To-Mid-Level Learning Plan
 
+> Written before the 20-story backlog shipped. The 14-day plan below still
+> works as a reading path, but several exercises in the later sections had
+> since been built for real — those now say so and point at the shipped
+> version, because reading a real PR and extending it teaches more than
+> rebuilding it. The PR-by-PR record is `fabledocs/03-progress.md`.
+
 ## 14-Day Study Plan
 
 Day 1: Read the README and architecture overview. Run the app and seed data.
@@ -48,25 +54,42 @@ Day 14: Present the architecture, risks, and extension plan as if in an intervie
 
 ## Agent Extension Exercises
 
-- Add a Guardian Communication Draft Agent.
-- Add a Lesson Plan Review Agent with deterministic rubric matching.
-- Add agent golden-output tests.
-- Add an approval flag before creating interventions.
+- ~~Add a Guardian Communication Draft Agent~~ — shipped
+  (`packages/agents/src/guardian-communication-agent.ts`). Instead: read it,
+  then explain why US-14 removed its guardian-name fallback.
+- Add a Lesson Plan Review Agent with deterministic rubric matching — still
+  the best open exercise; `docs/06-extension-projects.md` now spells out the
+  four shipped patterns to copy and the **Check** for done.
+- ~~Add agent golden-output tests~~ — shipped (US-19: 28 fixtures,
+  `npm run agents:eval` gates CI). Instead: add one fixture for an edge case
+  the existing 28 miss, and watch the determinism scan hold you to the
+  injected clock.
+- Add an approval flag before creating interventions — still open.
 
 ## Architecture Review Exercises
 
 - Identify logic that should stay out of React.
-- Identify where RBAC is too light.
-- Propose a background worker.
-- Propose multi-tenant school support.
+- Identify where RBAC is too light — read US-02's route guards and
+  `assertCan` first; the easy findings are taken, the subtle ones are not.
+- ~~Propose a background worker~~ — shipped (US-11: typed job handler
+  registry, idempotent enqueue). Instead: read PR #22 and critique the
+  decision to use one lock instead of two.
+- Propose multi-tenant school support — still open, and still the best
+  design exercise here.
 
 ## Data Modeling Exercises
 
-- Add terms/academic years.
-- Add rubrics.
-- Add guardian-to-student relationships.
-- Add many schools or districts.
-- Add notification delivery records.
+- ~~Add terms/academic years~~ — shipped (US-15: `academicTermId` required,
+  due dates validated against the term). Instead: explain what the migration
+  had to do with existing sections that had only a string `term`.
+- ~~Add rubrics~~ — shipped (US-06: criterion-level grading with derived
+  totals). Instead: add one rubric edge-case test (all criteria unscored).
+- ~~Add guardian-to-student relationships~~ — shipped (US-14, with an
+  idempotent backfill). Read the backfill before writing your own anywhere.
+- Add many schools or districts — still open.
+- ~~Add notification delivery records~~ — shipped (US-12: per-user inbox,
+  queue-driven). Instead: trace one notification from domain event to inbox
+  row and name every table it touches.
 
 ## Interview Talking Points
 
